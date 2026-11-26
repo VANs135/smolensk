@@ -100,12 +100,16 @@ export const HEDGEHOG_TEXTURE_ALPHA = 0.92
 
 /** 专规 3.5：地图上要画的**建造标记**（桥 / 简易机场；已放置的那几枚） */
 export interface ConstructionMarkerPiece {
+  /** 建造标记实体 id；绘制不需要，点击时用来把贴片对回原标记 */
+  id?: string
   kind: 'bridge' | 'airStrip'
   hex: HexRef
 }
 
 /** 建造标记贴片的落位（纯数据，供绘制与测试共用） */
 export interface ConstructionMarkerBadge {
+  /** 与 `ConstructionMarkerPiece.id` 同源；旧数据/测试可省略 */
+  id?: string
   kind: 'bridge' | 'airStrip'
   hex: HexRef
   /** 贴片中心（世界＝画布坐标，与其它图层同口径） */
@@ -981,6 +985,7 @@ export function constructionMarkerBadges(
     usedSlots.set(key, slot + 1)
     const hexCenter = hexCanvasPoint(marker.hex)
     badges.push({
+      id: marker.id,
       kind: marker.kind,
       hex: marker.hex,
       center: {

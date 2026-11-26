@@ -6,6 +6,7 @@ import { useHotseatStore, useMapViewStore, useSetupStore, useWorkbenchStore } fr
 
 import {
   CORE_HEX,
+  combatRecord,
   fighterRecord,
   groundRecord,
   label,
@@ -34,6 +35,30 @@ function markerAirstripStage() {
   workbench.addSpDump()
   workbench.setPhase('aircraftRefit')
   return { workbench, mapView: useMapViewStore() }
+}
+
+/** 移动中的地面单位 + 一枚落在可达格上的建造标记（用于钉「移动落点优先」） */
+function movementMarkerStage() {
+  setActivePinia(createPinia())
+  useSetupStore().finished = true
+  const workbench = useWorkbenchStore()
+  workbench.setActiveSide('axis')
+  useHotseatStore().setViewerSide('axis')
+  workbench.setAirActive(true)
+  placeAir(workbench, fighterRecord('axis'), CORE_HEX, 'axis', 'air-0', 'inactive')
+  const unit = placeGround(workbench, combatRecord('axis'), CORE_HEX, 'axis', 'move-1')
+  unit.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
+  unit.mpSpent = 0
+  unit.movementEnded = false
+  workbench.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+  workbench.setPhase('movement')
+  const index = workbench.playerSegmentSteps.findIndex(
+    (step) => step.id === 'movement.modeAndMovement',
+  )
+  expect(workbench.setSegmentStepIndex(index)).toBe(true)
+  workbench.selectedId = unit.instanceId
+  expect(workbench.beginMoveFor([unit.instanceId])).toBe(true)
+  return { workbench, mapView: useMapViewStore(), unit }
 }
 
 describe('专规 3.5：建造标记简易机场的基地操作', () => {
@@ -65,6 +90,69 @@ describe('专规 3.5：建造标记简易机场的基地操作', () => {
     expect(mapView.unitActionUnitId).toBe(id)
     expect(mapView.unitActionFamily).toBe('air')
     expect(mapView.actionBase?.id).toBe(id)
+  })
+
+  it('★ 同格桥 + 机场：按完整贴片槽位命中，桥贴片不误开机场面板', () => {
+    const stage = markerAirstripStage()
+    stage.workbench.constructionMarkerPieces = [
+      { id: 'bridge-1', kind: 'bridge', hex: CORE_HEX },
+      ...stage.workbench.constructionMarkerPieces,
+    ]
+    const badges = constructionMarkerBadges(stage.workbench.constructionMarkerPieces)
+    const airportBadge = badges.find((item) => item.kind === 'airStrip')
+    const bridgeBadge = badges.find((item) => item.kind === 'bridge')
+    expect(airportBadge).toBeDefined()
+    expect(bridgeBadge).toBeDefined()
+    expect(airportBadge!.center.x).not.toBe(bridgeBadge!.center.x)
+
+    stage.mapView.onHexClick(CORE_HEX, airportBadge!.center, airportBadge!.center, 1)
+    expect(stage.mapView.unitActionUnitId).toBe(stage.workbench.constructionMarkerAirBaseId('m1'))
+
+    const second = markerAirstripStage()
+    second.workbench.constructionMarkerPieces = [
+      { id: 'bridge-1', kind: 'bridge', hex: CORE_HEX },
+      ...second.workbench.constructionMarkerPieces,
+    ]
+    const bridge = constructionMarkerBadges(second.workbench.constructionMarkerPieces).find(
+      (item) => item.kind === 'bridge',
+    )
+    expect(bridge).toBeDefined()
+    second.mapView.onHexClick(CORE_HEX, bridge!.center, bridge!.center, 1)
+    expect(second.mapView.unitActionUnitId).not.toBe(
+      second.workbench.constructionMarkerAirBaseId('m1'),
+    )
+  })
+
+  it('★ 敌方观察视角：标记机场贴片保持只读，不能打开本方操作面板', () => {
+    const { workbench, mapView } = markerAirstripStage()
+    useHotseatStore().setViewerSide('soviet')
+    const badge = constructionMarkerBadges(workbench.constructionMarkerPieces).find(
+      (item) => item.kind === 'airStrip',
+    )
+    expect(badge).toBeDefined()
+    mapView.onHexClick(CORE_HEX, badge!.center, badge!.center, 1)
+    expect(mapView.unitActionUnitId).toBeNull()
+    expect(mapView.unitActionFamily).toBeNull()
+  })
+
+  it('★ 移动落点优先：点标记贴片仍执行移动，不被机场面板吞掉', () => {
+    const { workbench, mapView, unit } = movementMarkerStage()
+    const destination = workbench.groupReachable.hexes.find((node) => node.path.length === 2)
+    expect(destination).toBeDefined()
+    workbench.constructionMarkerPieces.push({
+      id: 'm-move',
+      kind: 'airStrip',
+      hex: { ...destination!.hex },
+    })
+    const badge = constructionMarkerBadges(workbench.constructionMarkerPieces).find(
+      (item) => item.kind === 'airStrip',
+    )
+    expect(badge).toBeDefined()
+
+    mapView.onHexClick(destination!.hex, badge!.center, badge!.center, 1)
+    expect(unit.hex).toEqual(destination!.hex)
+    expect(workbench.moveInteraction?.steps).toHaveLength(1)
+    expect(mapView.unitActionUnitId).toBeNull()
   })
 
   it('★ 3.5 限制仍在：不能在标记上再建 15.2A 设施（4.8 / 15.0a）', () => {

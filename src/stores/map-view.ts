@@ -1603,14 +1603,25 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 原有堆叠/移动分派。只在本方（轴方）基地可操作时接管，敌方观察视角保持只读信息。
    */
   function openConstructionMarkerAirstripAtPoint(world: { x: number; y: number }): boolean {
-    const pieces = workbench.constructionMarkerPieces.filter((piece) => piece.kind === 'airStrip')
-    if (pieces.length === 0) return false
-    const badge = constructionMarkerBadges(pieces).find(
-      (item) => Math.hypot(world.x - item.center.x, world.y - item.center.y) <= item.side / 2,
+    if (!setup.finished || hotseat.viewerSide !== actingSide.value) return false
+    /*
+     * 用**完整**标记列表投影贴片，再按 badge.id 回查原标记。
+     * 不能先 filter 出机场再投影：同格桥占槽位 0、机场占槽位 1 时，筛选后的数组会把机场
+     * 重算到槽位 0，点真实机场贴片反而落空、点桥贴片却可能误开机场面板。
+     */
+    const badges = constructionMarkerBadges(workbench.constructionMarkerPieces)
+    const badge = badges.find(
+      (item) =>
+        item.kind === 'airStrip' &&
+        Math.hypot(world.x - item.center.x, world.y - item.center.y) <= item.side / 2,
     )
     if (badge === undefined) return false
-    const piece = pieces.find(
-      (item) => item.hex.col === badge.hex.col && item.hex.row === badge.hex.row,
+    const piece = workbench.constructionMarkerPieces.find(
+      (item) =>
+        item.kind === 'airStrip' &&
+        (badge.id === undefined || item.id === badge.id) &&
+        item.hex.col === badge.hex.col &&
+        item.hex.row === badge.hex.row,
     )
     if (piece === undefined) return false
     const base = workbench.ownAirBases.find(
@@ -2641,7 +2652,10 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 它已通过 `openConstructionMarkerAirstripAtPoint` 的点选进入这里；驻机名册/整备/任务
      * 与普通空军基地同走 `air` 面板（3.5 明文限制仍由各自动作自己把关）。
      */
-    if (pinned !== null && workbench.isConstructionMarkerAirBaseId(pinned)) return 'air'
+    if (pinned !== null && workbench.isConstructionMarkerAirBaseId(pinned)) {
+      // 3.5 标记机场仍是本方设施：敌方观察视角只读，不因 id 前缀绕过归属闸门。
+      return hotseat.viewerSide === actingSide.value ? 'air' : null
+    }
     const unit =
       pinned === null
         ? workbench.units.find(
@@ -3929,6 +3943,20 @@ export const useMapViewStore = defineStore('mapView', () => {
       : null
     const option = counterActionsAt(hex, instanceId).find((item) => item.key === key)
     if (option === undefined || option.disabledReason !== null) return false
+    /*
+     * 工程窗的地图点格分派排在加油/炮击等既有付款分派之前。
+     * 打开另一条右键动作时先清掉旧工程会话，否则加油/战斗的下一击会被 `pickEngineerActionTargetAtHex`
+     * 当成「点工程候选格」吞掉；airstrip/hedgehog 自身由下面 prepare 重写字段，故保留。
+     */
+    if (
+      option.only !== 'airstrip' &&
+      option.only !== 'hedgehog' &&
+      unitActionIntent.value !== null
+    ) {
+      unitActionIntent.value = null
+      unitActionHex.value = null
+      unitActionUnitId.value = null
+    }
     /*
      * ④：一次性能力**点即执行**，不开右栏面板（与设施动作的 `unitActionIntent` 路径分开）。
      * 全部转发到既有入口；这里只负责"把右键点中的那一枚"落到既有入口所需的选中态。
@@ -5236,8 +5264,16 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
-    // 专规 3.5：点建造标记的简易机场贴片 ⇒ 与普通空军基地同一入口（驻机名册 / 整备 / 任务）
-    if (!modalPickLive && world !== undefined && openConstructionMarkerAirstripAtPoint(world))
+    /*
+     * 专规 3.5：点建造标记的简易机场贴片 ⇒ 与普通空军基地同一入口（驻机名册 / 整备 / 任务）
+     * 移动中的合法落点优先：贴片落在落点格上时这一击的意思是「走到这里」，不能被基地窗吞掉。
+     */
+    if (
+      !modalPickLive &&
+      world !== undefined &&
+      !moveDestinationAt(hex) &&
+      openConstructionMarkerAirstripAtPoint(world)
+    )
       return
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // 初设 †：已选中堆叠里的某一枚 ⇒ 点目标格即散开（越界/超堆叠由 store 拒绝并留原因）

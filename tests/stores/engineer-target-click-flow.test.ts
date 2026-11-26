@@ -98,4 +98,24 @@ describe('右键工程兵 → 高亮候选格 → 点格进付款', () => {
     expect(workbench.buildHedgehogNow()).toBe(true)
     expect(workbench.hedgehogLevelOf(NEAR_HEX)).toBeGreaterThan(0)
   })
+
+  it('★ 工程窗后再打开别的右键动作：清掉旧工程目标，下一击不再被工程付款吞掉', () => {
+    const { workbench, mapView } = stage()
+    mapView.openUnitContext(CORE_HEX, 'hq-1', { x: 0, y: 0 })
+    expect(mapView.openContextAction('hq-1', 'move.construction.baseBuild')).toBe(true)
+    expect(mapView.unitActionIntent?.only).toBe('airstrip')
+    expect(mapView.mapHighlightHexes).toContainEqual(NEAR_HEX)
+
+    // 同一单位改走「改变朝向」：这是点即执行、早返回的右键动作
+    expect(mapView.openUnitContext(CORE_HEX, 'hq-1', { x: 0, y: 0 })).toBe(true)
+    expect(mapView.openContextAction('hq-1', 'move.orientation.toggle')).toBe(true)
+    expect(mapView.unitActionIntent).toBeNull()
+    expect(mapView.mapHighlightHexes).not.toContainEqual(NEAR_HEX)
+
+    // 工程目标不再存在，点这个候选格应按普通地图点击处理
+    mapView.onHexClick(NEAR_HEX, { x: 0, y: 0 }, { x: 0, y: 0 }, 1)
+    expect(workbench.constructionInputs.hexText).toBe('')
+    expect(workbench.constructionPayPick).toBe(false)
+    expect(mapView.unitActionUnitId).toBeNull()
+  })
 })
