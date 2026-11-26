@@ -36,6 +36,7 @@
     "audit:error-text": "node scripts/audit-error-text.mjs --fail-unmapped",
     "probe:ui": "node scripts/probe-ui.mjs",
     "collect:ai": "node scripts/collect.mjs",
+    "train:stdio": "node scripts/train-stdio.mjs",
     "bench:ai": "node scripts/bench-training.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
     "prepare": "node scripts/install-hooks.mjs"
