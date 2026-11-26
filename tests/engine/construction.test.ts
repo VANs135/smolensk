@@ -94,11 +94,12 @@ const engineer = (
   ...over,
 })
 
-/** 目标格工事状态（缺省：无工事、非印刷、本回合未动） */
+/** 目标格工事状态（缺省：无工事、非印刷、无归属、本回合未动） */
 function hexState(over: Partial<HedgehogHexState> = {}): HedgehogHexState {
   return {
     level: 0,
     isPrintedPermanent: false,
+    ownerSide: null,
     levelsBuiltThisTurn: 0,
     levelsReducedThisTurn: 0,
     ...over,
@@ -482,8 +483,9 @@ describe('16.0b 环形工事修建 / 改进', () => {
 describe('16.0c 环形工事缩减（含专规 1.3a 永久工事不可降低）', () => {
   const reduce = (over: Partial<Parameters<typeof planHedgehogReduce>[0]> = {}) =>
     planHedgehogReduce({
+      side: 'axis',
       executor: workers(worker()),
-      hex: hexState({ level: 1 }),
+      hex: hexState({ level: 1, ownerSide: 'axis' }),
       ...over,
     })
 
@@ -503,6 +505,17 @@ describe('16.0c 环形工事缩减（含专规 1.3a 永久工事不可降低）'
       ok: false,
       reason: 'noHedgehogInHex',
     })
+  })
+
+  it('16.0c：只能缩减己方工事，敌方工事即拒', () => {
+    expect(
+      reduce({ side: 'axis', hex: hexState({ level: 1, ownerSide: 'soviet' }) }),
+    ).toMatchObject({
+      ok: false,
+      rule: '16.0c',
+      reason: 'enemyHedgehogCannotBeReduced:soviet',
+    })
+    expect(reduce({ side: 'axis', hex: hexState({ level: 1, ownerSide: 'axis' }) }).ok).toBe(true)
   })
 
   it('16.0c：降到 1 级以下 ⇒ 移除；缩减**免费**', () => {

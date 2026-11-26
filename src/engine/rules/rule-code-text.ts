@@ -562,6 +562,7 @@ export const CONSTRUCTION_CODE_TEXT: Readonly<Record<string, string>> = {
   hedgehogAlreadyReducedThisTurn: '该格本回合已经缩减过环形工事（每回合最多 −1 级，16.0c）',
   insufficientSpForHedgehog: '修建环形工事的 SP 不足（16.0b）',
   noHedgehogInHex: '该格没有环形工事可缩减（16.0c）',
+  enemyHedgehogCannotBeReduced: '不能缩减敌方环形工事，只能缩减己方工事（16.0c）',
   printedPermanentHedgehogCannotBeReduced: '印刷在地图上的永久工事不能缩减（专规 1.3a）',
   sovietCannotBuildHedgehogBefore: '苏军在 1941-08-01 回合之前不能修建环形工事（专规 2.3e）',
   // ── 空军基地 / 简易机场（通规 15.3 / 15.2A）──

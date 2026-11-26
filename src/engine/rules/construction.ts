@@ -376,6 +376,13 @@ export interface HedgehogHexState {
   level: number
   /** 专规 1.3a：该格是否为**印刷永久工事**（永久且不可降低） */
   isPrintedPermanent: boolean
+  /**
+   * 16.0c：该格工事**此刻的归属方**（`null` ＝ 无工事，或印刷永久工事不参与缩减）
+   *
+   * 16.0c 的缩减只能针对**己方**工事；工事算子的 `side` 是归属的唯一运行期来源
+   * （9.14e 夺取后即由 store 的落盘分支翻面）。
+   */
+  ownerSide: Side | null
   /** 本回合该格**已提升**的级数（16.0b：每回合最多 +1） */
   levelsBuiltThisTurn: number
   /** 本回合该格**已降低**的级数（16.0c：每回合最多 −1） */
@@ -466,9 +473,12 @@ export interface HedgehogReduceResult {
  * 16.0c：环形工事**缩减**（−1 级）
  *
  * 硬条件：移动阶段；执行者合格（同上两条途径）；该格本回合未降低过；该格**有**工事；
+ * ★ **16.0c 只能缩减己方工事**（不能在敌方工事上作业）；
  * ★ **专规 1.3a：印刷永久工事不可降低**。「如果环形工事的等级降低后小于 1 级，则将它移除。」缩减**不耗 SP**。
  */
 export function planHedgehogReduce(input: {
+  /** 执行缩减的一方（16.0c：只能缩减己方工事） */
+  side: Side
   executor: ConstructionExecutor
   hex: HedgehogHexState
 }): RuleOutcome<HedgehogReduceResult> {
@@ -476,6 +486,9 @@ export function planHedgehogReduce(input: {
   if (input.hex.isPrintedPermanent)
     return fail('专规 1.3a', 'printedPermanentHedgehogCannotBeReduced')
   if (input.hex.level < 1) return fail('16.0c', 'noHedgehogInHex')
+  // ★ 16.0c：只能缩减己方环形工事（归属取工事算子当前的 `side`，9.14e 夺取后已翻面）
+  if (input.hex.ownerSide !== null && input.hex.ownerSide !== input.side)
+    return fail('16.0c', `enemyHedgehogCannotBeReduced:${input.hex.ownerSide}`)
   if (input.hex.levelsReducedThisTurn >= HEDGEHOG_LEVELS_PER_TURN)
     return fail('16.0c', 'hedgehogAlreadyReducedThisTurn')
 

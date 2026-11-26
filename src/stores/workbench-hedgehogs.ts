@@ -161,6 +161,20 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     return Math.max(printedHedgehogLevelAt(hex), hedgehogLevelAt(units.value, hex))
   }
 
+  /**
+   * 16.0c：该格**摆出的**工事算子归属（`null` ＝ 该格没有算子型工事）
+   *
+   * 工事归属的唯一运行期载体是工事算子的 `side`：修建时写当前方，9.14e 夺取后由
+   * `workbench.ts` 的 9.14e 落盘分支翻面。印刷永久工事不参与缩减（专规 1.3a），
+   * 故这里不为它造第二套归属账。
+   */
+  function hedgehogOwnerAt(hex: HexRef): Side | null {
+    const placed = units.value.find(
+      (unit) => sameHex(unit.hex, hex) && unit.noncombatKind === 'hedgehog',
+    )
+    return placed === undefined ? null : placed.side
+  }
+
   /** 专规 1.3a：该格是否为**印刷永久工事**（永久且**不可降低**） */
   function isPrintedHedgehogAt(hex: HexRef): boolean {
     return printedPermanentHedgehogAt(hex)
@@ -191,6 +205,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     return {
       level: hedgehogLevelOf(hex),
       isPrintedPermanent: isPrintedHedgehogAt(hex),
+      ownerSide: hedgehogOwnerAt(hex),
       levelsBuiltThisTurn: ledger.built,
       levelsReducedThisTurn: ledger.reduced,
     }
@@ -355,6 +370,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     const hex = hedgehogTargetHex.value
     if (hex === null || !hedgehogExecutorReady.value) return null
     return planHedgehogReduce({
+      side: activeSide.value,
       executor: constructionExecutor(hex),
       hex: hedgehogHexState(hex),
     })
@@ -392,6 +408,8 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     const state = hedgehogHexState(hex)
     if (state.isPrintedPermanent) return '这一格是地图印刷永久工事：不可修建、不可降低（专规 1.3a）'
     if (state.level < 1) return '该格没有环形工事（16.0c）'
+    if (state.ownerSide !== null && state.ownerSide !== activeSide.value)
+      return '这一格是敌方环形工事：只能缩减己方工事（16.0c）'
     if (state.levelsReducedThisTurn >= HEDGEHOG_LEVELS_PER_TURN)
       return '该格本回合已经缩减过（16.0c：每回合 −1 级）'
     if (!hedgehogExecutorReady.value)
@@ -596,6 +614,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       }
     }
     const outcome = planHedgehogReduce({
+      side: activeSide.value,
       executor: constructionExecutor(hex),
       hex: hedgehogHexState(hex),
     })
@@ -605,13 +624,20 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       return false
     }
     const placed = units.value.find(
-      (unit) => sameHex(unit.hex, hex) && unit.noncombatKind === 'hedgehog',
+      (unit) =>
+        sameHex(unit.hex, hex) &&
+        unit.noncombatKind === 'hedgehog' &&
+        unit.side === activeSide.value,
     )
+    if (placed === undefined) {
+      hedgehogError.value = { rule: '16.0c', reason: '该格找不到己方工事算子（16.0c）' }
+      pushLog('warning', '缩减工事被拒：该格找不到己方工事算子（16.0c）', '16.0c')
+      return false
+    }
     captureUndoSnapshot(`缩减环形工事 ${hexLabel(hex)}`)
     if (outcome.data.removes) {
-      if (placed !== undefined)
-        units.value = units.value.filter((unit) => unit.instanceId !== placed.instanceId)
-    } else if (placed !== undefined) {
+      units.value = units.value.filter((unit) => unit.instanceId !== placed.instanceId)
+    } else {
       placed.noncombatLevel = outcome.data.levelAfter
     }
     markConstructionWorkersImmobile(outcome.data.immobileUnitIds)

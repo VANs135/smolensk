@@ -222,6 +222,31 @@ describe('16.0c：缩减环形工事（−1 级、免费、印刷工事不可降
     expect(store.reduceHedgehogNow()).toBe(false)
     expect(store.hedgehogError?.reason).toBe('noHedgehogInHex')
   })
+
+  it('16.0c：只能缩减己方工事，敌方工事即拒（且窗口预检先给归属提示）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    store.setTurn(4)
+    const hexText = `${CORE_HEX.col}.${CORE_HEX.row}`
+    const [a, b] = placeWorkers(store, hexText)
+    const enemyHogRecord = groundRecord(
+      'soviet',
+      (record) => record.noncombatKind === 'hedgehog' && record.noncombatDetails?.level === 1,
+    )
+    const enemyHog = placeGround(store, enemyHogRecord, CORE_HEX, 'soviet', 'hog-sv')
+    expect(enemyHog.noncombatLevel).toBe(1)
+    store.hedgehogInputs = { hexText, workerIds: [a!.instanceId, b!.instanceId], payDumpId: null }
+
+    expect(store.hedgehogReduceMissing).toContain('敌方环形工事')
+    expect(store.reduceHedgehogNow()).toBe(false)
+    expect(store.hedgehogError?.rule).toBe('16.0c')
+    expect(store.hedgehogError?.reason).toContain('enemyHedgehogCannotBeReduced')
+    // 敌方工事仍在盘上、等级未动，施工者也没有被本次失败的作业锁住
+    expect(store.hedgehogLevelOf(CORE_HEX)).toBe(1)
+    expect(enemyHog.noncombatLevel).toBe(1)
+    expect(a!.movementEnded).toBe(false)
+    expect(b!.movementEnded).toBe(false)
+  })
 })
 
 describe('专规 1.3a：印刷永久工事', () => {
