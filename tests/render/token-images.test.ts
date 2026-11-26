@@ -85,6 +85,16 @@ describe('计数类非战斗算子：图随**当前数值**走（不是记录里
     expect(hedgehogCounterImageUrl(2)).not.toBe(hedgehogTextureUrl(2))
   })
 
+  it('专规 3.5：桥用 `_B` 面，简易机场仍用 `_F` 面', () => {
+    expect(constructionMarkerImageUrl('bridge')).toBe(
+      packedCounterUrl('markers', 'Ge_Air_Strip-Bridge_B.png'),
+    )
+    expect(constructionMarkerImageUrl('airStrip')).toBe(
+      packedCounterUrl('markers', 'Ge_Air_Strip-Bridge_F.png'),
+    )
+    expect(constructionMarkerImageUrl('bridge')).not.toBe(constructionMarkerImageUrl('airStrip'))
+  })
+
   it('tokenImageUrl：计数类按数值、其余按记录的两面图', () => {
     // SP：即便记录里带 1 点的图，也按**当前点数**取（拆并补给台后点数会变）
     expect(
@@ -128,15 +138,16 @@ describe('各种贴图（模式标记 / 工事等级）', () => {
     expect(hedgehogTextureUrl(2.5)).toBeNull()
   })
 
-  it('预载清单覆盖全部 17 张贴图（3 进击 + 2 预备 + 战略 + 断补 + DG + 3 扣兵力 + 4 工事 + 铁路端头 + 建造标记）', () => {
+  it('预载清单覆盖全部 18 张贴图（3 进击 + 2 预备 + 战略 + 断补 + DG + 3 扣兵力 + 4 工事 + 铁路端头 + 桥/简易机场两枚建造标记）', () => {
     const urls = allMarkerTextureUrls()
-    expect(urls).toHaveLength(17)
-    expect(new Set(urls).size).toBe(17)
+    expect(urls).toHaveLength(18)
+    expect(new Set(urls).size).toBe(18)
     expect(urls.every((url) => isCounterUrl(url))).toBe(true)
     // 13.3d：铁路端头 `mk-38` 的贴图必须在预载清单里
     expect(urls).toContain(markerTextureUrl('Neutral_Railhead.png'))
-    // 专规 3.5：建造标记按算子原尺画，图必须随启动预载（否则开局那几回合看不到）
-    expect(urls).toContain(constructionMarkerImageUrl())
+    // 专规 3.5：桥 / 简易机场各一面，图必须随启动预载（否则开局那几回合看不到）
+    expect(urls).toContain(constructionMarkerImageUrl('bridge'))
+    expect(urls).toContain(constructionMarkerImageUrl('airStrip'))
     // 用户 2026-11-18：预备模式标记要随启动预载，否则整局都看不到
     expect(urls).toContain(reserveModeTextureUrl('axis'))
     expect(urls).toContain(reserveModeTextureUrl('soviet'))

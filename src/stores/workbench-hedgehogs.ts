@@ -33,6 +33,7 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 
 import {
+  CONSTRUCTION_RADIUS_HEXES,
   HEDGEHOG_LEVELS_PER_TURN,
   HEDGEHOG_MAX_LEVEL,
   SP_TO_T,
@@ -433,6 +434,48 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     return deliverableDumpsFor(activeSide.value, beneficiaries)
   })
 
+  /**
+   * 16.0b/c：**当前施工工程兵**在这一刻能施工的**格全集**（地图高亮用）
+   *
+   * 与空军建造窗同一口径：玩家右键已经选好单位，窗口不再列全部工程兵；只把能作业的格子铺到地图上。
+   * 判据与 `buildHedgehogNow` / `reduceHedgehogNow` 同源：13.8d 公共闸门 + 逐格 `plan*`
+   * （付款仍留到点格后，故 `availableSp` 先按无穷大放开）。
+   * 仅 `engineer` 途径铺全集；`inPlace` 途径的目标格本来就只有被点中的本单位所在格。
+   */
+  const hedgehogCandidateHexes = computed<(task: 'build' | 'reduce') => HexRef[]>(() => (task) => {
+    if (!hedgehogUsesEngineerRoute.value) return []
+    const engineer = pickedHedgehogEngineer()
+    if (engineer === null) return []
+    const gate = constructionGateNow(
+      task === 'build' ? 'buildHedgehog' : 'reduceHedgehog',
+      engineer,
+    )
+    if (gate !== null) return []
+    return mapLayers.hexes
+      .map((hex) => ({ col: hex.col, row: hex.row }))
+      .filter((hex) => {
+        const executor = engineerExecutorFor(engineer, hex)
+        if (executor.legMpDistanceToTarget > CONSTRUCTION_RADIUS_HEXES) return false
+        const state = hedgehogHexState(hex)
+        const outcome =
+          task === 'build'
+            ? planHedgehogBuild({
+                side: activeSide.value,
+                date: date.value,
+                executor,
+                hex: state,
+                availableSp: Number.POSITIVE_INFINITY,
+                ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+              })
+            : planHedgehogReduce({
+                side: activeSide.value,
+                executor,
+                hex: state,
+              })
+        return outcome.ok
+      })
+  })
+
   /** 工事付款的「点地图选站」模式 */
   const hedgehogPayPick = ref(false)
 
@@ -664,6 +707,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogEngineerId,
     hedgehogUsesEngineerRoute,
     hedgehogTargetHex,
+    hedgehogCandidateHexes,
     hedgehogTargetState,
     hedgehogEngineer,
     hedgehogEngineerLegRange,
@@ -693,6 +737,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogEngineerId,
     hedgehogUsesEngineerRoute,
     hedgehogTargetHex,
+    hedgehogCandidateHexes,
     hedgehogTargetState,
     hedgehogEngineer,
     hedgehogEngineerLegRange,

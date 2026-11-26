@@ -18,13 +18,14 @@
  *   二者来自 air 域解构（facade 的 `} = airDomain` 段），晚于本装配点 ⇒ deps 给 getter，
  *   本切片**不解构**它们、一律写 `deps.xxx`，于是求值推迟到调用期（无 TDZ）。
  *
- * ## 端口（31 项 = 18 依赖 + 13 返回）
+ * ## 端口（32 项 = 19 依赖 + 13 返回）
  *   `airBaseRecordFor` 只被本切片内部调用（`placeAirBaseOperator`），故不 return。
  */
 
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 
 import {
+  CONSTRUCTION_RADIUS_HEXES,
   SP_TO_T,
   airBaseBuildCostSp,
   holdingsToT,
@@ -40,7 +41,7 @@ import { sameHex } from '@/engine/hex-geometry'
 import type { Derivation } from '@/engine/derivation'
 import type { RuleFailure } from '@/engine/result-types'
 import { createId } from '@/shared'
-import { type HexRef, type Side } from '@/data'
+import { mapLayers, type HexRef, type Side } from '@/data'
 import {
   hexLabel,
   parseHexPath,
@@ -76,6 +77,8 @@ export interface AirFacilityDeps {
   captureUndoSnapshot: (label: string) => number | null
   dropUndoBySeq: (seq: number) => void
   isConstructionMarkerAirBaseId: (id: string) => boolean
+  /** 专规 3.5：已放置的建造标记（晚绑定，升格标记简易机场后撤掉那一枚） */
+  constructionMarkerPieces: () => Ref<{ id: string; kind: 'bridge' | 'airStrip'; hex: HexRef }[]>
   /** 留在 facade（读 `moveContext`，见文件头） */
   canEngineerInPhase: (unit: ConsoleUnit) => boolean
   /** 13.8d 施工域（b16 切片）的共享状态与入口 */
@@ -104,6 +107,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     captureUndoSnapshot,
     dropUndoBySeq,
     isConstructionMarkerAirBaseId,
+    constructionMarkerPieces,
     canEngineerInPhase,
     constructionError,
     constructionFeeT,
@@ -250,12 +254,12 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       task === 'airstripUpgrade'
         ? (deps.airBases.value.find((base) => base.id === baseId) ?? null)
         : null
+    const upgradeIsMarker =
+      task === 'airstripUpgrade' && baseId !== undefined && isConstructionMarkerAirBaseId(baseId)
     const hex =
       task === 'airstripUpgrade' ? (upgradeBase?.hex ?? null) : constructionTargetHex.value
     if (hex === null) return '还差：点地图选目标格（15.2A / 15.3）'
     if (task === 'airstripUpgrade' && upgradeBase === null) return '还差：找不到该空中设施（15.2A）'
-    if (task === 'airstripUpgrade' && baseId !== undefined && isConstructionMarkerAirBaseId(baseId))
-      return '还差：建造标记的简易机场不能按 15.2A 升格（专规 3.5）'
     if (task === 'airstripUpgrade' && upgradeBase !== null && upgradeBase.side !== activeSide.value)
       return '还差：只能升格本方简易机场（9.14f）'
     /*
@@ -264,7 +268,15 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
      * 15.2A 也会在标记格上再摆一座设施。
      */
     const targetIssue = airFacilityTargetIssue(hex)
-    if (targetIssue !== null) return `还差：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`
+    if (
+      targetIssue !== null &&
+      !(
+        task === 'airstripUpgrade' &&
+        upgradeIsMarker &&
+        targetIssue.reason === 'airBaseTargetIsMarkerAirstrip'
+      )
+    )
+      return `还差：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`
     const engineer = pickedEngineer()
     if (engineer === null) return '还差：选施工工程兵（13.8d）'
     const gate = constructionGateNow(
@@ -307,14 +319,85 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     }
     const outcome = planAirstripUpgrade({
       executor,
-      hexHasAirstrip: isAirstripAt(hex),
+      hexHasAirstrip: isAirstripAt(hex) || upgradeIsMarker,
       availableT,
     })
     return outcome.ok ? null : `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
   })
 
+  /**
+   * 15.3 / 15.2A：**当前施工者**在这一刻能施工的**格全集**（地图高亮用）
+   *
+   * 用户 2026-11-26：「右键单位使用工程能力时不应该把工程能力的单位全列出来，因为玩家已经选好单位了，
+   * 此时应该高亮可进行工程的格子，玩家点击格子就到支付补给。」
+   *
+   * 判据与三条落盘动作**同源**：13.8d 的公共闸门只判一次（未移动 / 一单位一格一任务 / 阶段），
+   * 逐格再用同一引擎 `plan*` 判目标格本身（`availableSp/T` 先按无穷大放开，付款仍留到点格之后）。
+   * 因此这里只回答"哪些格值得点"，不替玩家选付款站、也不落盘。
+   */
+  const airConstructionCandidateHexes = computed<
+    (task: 'baseBuild' | 'airstripBuild' | 'airstripUpgrade') => HexRef[]
+  >(() => (task) => {
+    const engineer = pickedEngineer()
+    if (engineer === null) return []
+    const gate = constructionGateNow(
+      task === 'baseBuild'
+        ? 'buildAirBase'
+        : task === 'airstripBuild'
+          ? 'buildAirstrip'
+          : 'upgradeAirstrip',
+      engineer,
+    )
+    if (gate !== null) return []
+    /*
+     * 升格：目标不是"任意格"，而是**本方简易机场**（含专规 3.5 的建造标记简易机场：
+     * 原文"acts like a standard air strip (OCS 15.2)"）。判据与 `upgradableAirstripsFor` 同源。
+     */
+    if (task === 'airstripUpgrade') {
+      return deps.airBases.value
+        .filter((base) => base.side === activeSide.value && base.isAirstrip === true)
+        .filter((base) => {
+          const executor = engineerExecutorFor(engineer, base.hex)
+          return executor.legMpDistanceToTarget <= CONSTRUCTION_RADIUS_HEXES
+        })
+        .filter((base) => {
+          const outcome = planAirstripUpgrade({
+            executor: engineerExecutorFor(engineer, base.hex),
+            hexHasAirstrip: true,
+            availableT: Number.POSITIVE_INFINITY,
+          })
+          return outcome.ok
+        })
+        .map((base) => ({ ...base.hex }))
+    }
+    return mapLayers.hexes
+      .map((hex) => ({ col: hex.col, row: hex.row }))
+      .filter((hex) => {
+        const executor = engineerExecutorFor(engineer, hex)
+        if (executor.legMpDistanceToTarget > CONSTRUCTION_RADIUS_HEXES) return false
+        if (airFacilityTargetIssue(hex) !== null) return false
+        if (task === 'baseBuild') {
+          // 简易机场的升格走 15.2A 的 3 T，不在 15.3 的 1 SP 候选里（与 `buildAirBaseNow` 同一拒绝）
+          if (isAirstripAt(hex)) return false
+          const outcome = planAirBaseBuild({
+            executor,
+            currentLevel: airBaseLevelAt(hex),
+            levelsBuiltThisTurn: airBaseTurnLedger.value[hexLabel(hex)] ?? 0,
+            availableSp: Number.POSITIVE_INFINITY,
+          })
+          return outcome.ok
+        }
+        const outcome = planAirstripBuild({
+          executor,
+          hexHasAirFacility: hexHasAirFacility(hex),
+          availableT: Number.POSITIVE_INFINITY,
+        })
+        return outcome.ok
+      })
+  })
+
   /** 15.3：把该格的设施换成**该等级**的空军基地算子（升级＝换算子；无则新摆） */
-  function placeAirBaseOperator(hex: HexRef, level: number): boolean {
+  function placeAirBaseOperator(hex: HexRef, level: number, allowMarkerAirstrip = false): boolean {
     const record = airBaseRecordFor(level)
     if (record === null) {
       pushLog('warning', `算子库没有 ${level} 级空军基地算子（15.0c）`, '15.3')
@@ -323,9 +406,13 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     /*
      * 落盘前的最后一道目标格闸：窗口预检可能被绕过（旧输入、脚本、并发点击），
      * 这里再按同一 `airFacilityTargetIssue` 拒一次，绝不允许“把敌方基地直接换成本方”。
+     * 专规 3.5：升格标记简易机场时**唯一**允许带标记落 1 级基地，落盘后立刻撤掉标记。
      */
     const targetIssue = airFacilityTargetIssue(hex)
-    if (targetIssue !== null) {
+    if (
+      targetIssue !== null &&
+      !(allowMarkerAirstrip && targetIssue.reason === 'airBaseTargetIsMarkerAirstrip')
+    ) {
       pushLog(
         'warning',
         `摆放空军基地被拒：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`,
@@ -524,15 +611,9 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `找不到空中设施 ${baseId}（15.2A）`, '15.2A')
       return false
     }
-    // 专规 3.5：建造标记的简易机场没有对应的空军基地算子可升格 ⇒ 不走 15.2A 的升级落盘
-    if (isConstructionMarkerAirBaseId(baseId)) {
-      pushLog(
-        'warning',
-        '建造标记的简易机场不能按 15.2A 升格（专规 3.5 的标记不可改作基地）',
-        '专规 3.5',
-      )
-      return false
-    }
+    // 专规 3.5：标记简易机场按 15.2「standard air strip」同口径，可支付 3T 升为 1 级基地；
+    // 升格后标记本体撤掉（换成真正的基地算子），此后按普通基地参与 9.14f/15.4。
+    const markerAirstrip = isConstructionMarkerAirBaseId(baseId)
     if (base.side !== activeSide.value) {
       const issue = { rule: '9.14f', reason: 'airBaseTargetIsEnemy' }
       constructionError.value = issue
@@ -567,8 +648,16 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       return false
     // 15.2A：升格＝撤掉简易机场声明并把等级落到 1 级（整备 2 架、有防空值、可再被改进）
     deps.airstripBaseIds.value = deps.airstripBaseIds.value.filter((id) => id !== baseId)
-    const target = units.value.find((unit) => unit.instanceId === baseId)
-    if (target !== undefined) target.noncombatLevel = outcome.data.levelAfter
+    if (markerAirstrip) {
+      if (!placeAirBaseOperator(base.hex, outcome.data.levelAfter, true)) return false
+      const pieceId = baseId.slice('cm-airbase:'.length)
+      constructionMarkerPieces().value = constructionMarkerPieces().value.filter(
+        (piece) => piece.id !== pieceId,
+      )
+    } else {
+      const target = units.value.find((unit) => unit.instanceId === baseId)
+      if (target !== undefined) target.noncombatLevel = outcome.data.levelAfter
+    }
     if (engineer !== null) engineer.movementEnded = true
     noteConstruction('upgradeAirstrip', base.hex, engineer?.instanceId ?? null)
     constructionError.value = null
@@ -596,6 +685,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     hexHasAirFacility,
     airConstructionTask,
     constructionTargetHex,
+    airConstructionCandidateHexes,
     constructionErrorLine,
     airConstructionMissing,
     buildAirBaseNow,
@@ -617,6 +707,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     pickedEngineer,
     airConstructionTask,
     constructionTargetHex,
+    airConstructionCandidateHexes,
     constructionErrorLine,
     airConstructionMissing,
     buildAirBaseNow,

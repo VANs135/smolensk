@@ -2217,7 +2217,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 装配点必须早于 air 建域——`createAirDomain` 的 `airUnloadedTAt` 是**按值** deps（建域即求值）。
    * ★ `airstripBaseIds` / `airBases` 来自 air 域解构（本处之后）⇒ deps 给 getter，切片不解构它们。
    * ★ `pickedEngineer` 随本批搬走 ⇒ b16 的施工域构造处改成转发箭头。
-   * ★ 端口 31 项 = 18 依赖 + 13 返回（placeAirBaseOperator 只被切片内部的 build* 用 ⇒ 不 return）。
+   * ★ 端口 32 项 = 19 依赖 + 13 返回（placeAirBaseOperator 只被切片内部的 build* 用 ⇒ 不 return）。
    */
   const airFacilityDomain = createAirFacilityDomain({
     activeSide,
@@ -2230,6 +2230,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     captureUndoSnapshot,
     dropUndoBySeq,
     isConstructionMarkerAirBaseId,
+    constructionMarkerPieces: () => constructionMarkerPieces,
     canEngineerInPhase,
     constructionError,
     constructionFeeT,
@@ -2448,11 +2449,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   } = airDomain
 
   /**
-   * 15.2A「升格为一级空军基地 3 T」的候选：指定工程兵 2 格步行 MP 内的**本方简易机场**
-   *
-   * 放在 facade 而不是 air-facility 域：它要读 `constructionLegRangeTo`（13.8d 施工域），
-   * 走端口会加宽 `AirFacilityDeps`（门禁棘轮 16→17 不允许）；读公开面则不增端口。
-   * 专规 3.5 的建造标记简易机场没有对应基地算子可升格（`upgradeAirstripNow` 会拒），故先筛掉。
+   * 15.2A「升格为一级空军基地 3 T」的候选：指定工程兵 2 格步行 MP 内的**本方简易机场**。
+   * 专规 3.5：建造标记的简易机场按原文「acts like a standard air strip」⇒ 同样可升格。
    */
   const upgradableAirstripsFor = computed<(engineerId: string | null) => AirBaseView[]>(
     () => (engineerId) => {
@@ -2465,7 +2463,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (base) =>
           base.side === activeSide.value &&
           base.isAirstrip === true &&
-          !isConstructionMarkerAirBaseId(base.id) &&
           (constructionLegRangeTo(engineer, base.hex) ?? Number.POSITIVE_INFINITY) <=
             CONSTRUCTION_RADIUS_HEXES,
       )
@@ -22957,6 +22954,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     constructionMarkers,
     upgradableAirstripsFor,
     constructionMarkerPieces,
+    constructionMarkerAirBaseId,
+    isConstructionMarkerAirBaseId,
     constructionMarkerHexText,
     constructionMarkerError,
     constructionMarkerTargetHex,

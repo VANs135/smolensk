@@ -93,7 +93,7 @@ export const HEDGEHOG_TEXTURE_ALPHA = 0.92
  *   · 尺寸＝`HEX_CHIP_SIZE_RATIO`（0.28R，与 HQ / 设施 / 占领标记 / 通用标记同一枚尺）；
  *   · 落位＝`HEX_CHIP_ANCHORS.construction`（**下中**内沿，不占设施用的左下）；
  *   · 同格多枚沿 `HEX_CHIP_SLOT_STEP` 向右排开；
- *   · 图仍用素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥 / 简易机场共用一面），
+ *   · 图＝素材库正式算子面（桥=`Ge_Air_Strip-Bridge_B.png`、简易机场=`..._F.png`）；
  *     贴图未就绪时退回同尺寸方块 + 桥/机；
  *   · 仍不进 `tokens`：不参与命中测试/堆叠展开/选中。
  */
@@ -874,7 +874,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
    *
    * 用户口径（2026-11-26 第二次）：「不要这么大，和设施一样小，并且放格子边缘位置」；
    * 2026-11-26 第三次：并入 `hex-chips` 的**统一尺 + 固定槽位**（下中）。
-   *   · 图＝素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥与简易机场共用同一面）；
+   *   · 图＝素材库正式算子面（桥 `_B`、简易机场 `_F`，按 `badge.kind` 各取一面）；
    *   · 尺寸＝`HEX_CHIP_SIZE_RATIO`（0.28R，与 HQ / 设施 / 占领标记 / 通用标记同一枚尺）；
    *   · 落位＝`HEX_CHIP_ANCHORS.construction`（**右下**内沿，不占设施用的左下、不压格心），同格多枚沿 `HEX_CHIP_SLOT_STEP` 向右；
    *   · 仍**不是算子**：不进 `tokens`，故不参与命中测试/堆叠展开/选中；
@@ -882,11 +882,10 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
    */
   if (layers.constructionMarkers) {
     const badges = constructionMarkerBadges(options.constructionMarkers ?? [])
-    const url = constructionMarkerImageUrl()
-    const texture = counterImages.get(url)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     for (const badge of badges) {
+      const texture = counterImages.get(constructionMarkerImageUrl(badge.kind))
       if (texture !== null) {
         ctx.drawImage(
           texture,

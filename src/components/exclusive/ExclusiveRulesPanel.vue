@@ -729,7 +729,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
             <option value="engineer">② 工程兵（2 格半径内，13.8d）</option>
           </select>
         </label>
-        <div v-if="workbench.hedgehogUsesEngineerRoute" class="field">
+        <div v-if="workbench.hedgehogUsesEngineerRoute && props.only !== 'hedgehog'" class="field">
           <CounterPicker
             title="施工工程兵（13.8d）"
             hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
@@ -743,12 +743,16 @@ const compactPanzer = computed(() => props.only === 'panzer')
           目标格
           <UiField v-model="workbench.hedgehogInputs.hexText" class="input" placeholder="36.13" />
           <BaseButton
+            v-if="props.only !== 'hedgehog'"
             variant="secondary"
             size="sm"
             @click="workbench.beginHedgehogHexPickNow(hedgehogTask)"
           >
             点地图选格
           </BaseButton>
+          <span v-else-if="workbench.hedgehogTargetHex === null" class="num">
+            点地图上高亮的施工格（13.8d）
+          </span>
         </label>
         <div v-if="showHedgehogBuild" class="field">
           付款补给站（修建用；缩减免费）

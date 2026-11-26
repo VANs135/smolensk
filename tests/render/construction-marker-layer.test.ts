@@ -88,11 +88,12 @@ describe('专规 3.5：建造标记的地图层', () => {
     // 统一尺与固定槽位来自 hex-chips，不另立一套数值
     expect(render).toContain('HEX_CHIP_SIZE_RATIO')
     expect(render).toContain('CONSTRUCTION_CORNER')
-    // 图＝素材库正式算子面（桥/机场共用），并进了预载清单
-    expect(render).toContain('constructionMarkerImageUrl')
+    // 图＝素材库正式算子面（桥 `_B` / 简易机场 `_F`，各取一面），并进了预载清单
+    expect(render).toContain('constructionMarkerImageUrl(badge.kind)')
     const images = readFileSync('src/render/token-images.ts', 'utf8')
-    expect(images).toContain("CONSTRUCTION_MARKER_TEXTURE = 'Ge_Air_Strip-Bridge_F.png'")
-    expect(images).toContain('constructionMarkerImageUrl(),')
+    expect(images).toContain("bridge: 'Ge_Air_Strip-Bridge_B.png'")
+    expect(images).toContain("airStrip: 'Ge_Air_Strip-Bridge_F.png'")
+    expect(images).toContain('...Object.values(CONSTRUCTION_MARKER_TEXTURES)')
     // 画布只画被给的东西（不读 store）：props → drawMap 的 options
     const canvas = readFileSync('src/components/map/MapCanvas.vue', 'utf8')
     expect(canvas).toContain('constructionMarkers: props.constructionMarkers')

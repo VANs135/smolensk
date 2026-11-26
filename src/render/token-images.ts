@@ -198,18 +198,22 @@ export const RAILHEAD_TEXTURE = 'Neutral_Railhead.png'
  * 专规 3.5：**建造标记**算子的贴图文件名（`markers.json` 的 `mk-airbase-axis-air-strip-bridge`）
  *
  * 2026-11-26 用户裁定：建造标记要**画成对应算子、大小和空军基地算子一样**。
- * 素材库里这张就是正式的 "Ge Air Strip/Bridge" 算子面（同一面同时画了跑道与桥），
- * 故桥与简易机场共用一张图；差别只落在日志/条款文字里。
+ * 素材库里 "Ge Air Strip/Bridge" 有正反两面：`_F` 画跑道（简易机场），`_B` 画桥。
+ * 2026-11-26 追加口径：「临时桥梁用 `Ge_Air_Strip-Bridge_B.png` 贴图，临时机场不变」——
+ * 故桥用背面、简易机场仍用正面；差别也落在日志/条款文字里。
  */
-export const CONSTRUCTION_MARKER_TEXTURE = 'Ge_Air_Strip-Bridge_F.png'
+export const CONSTRUCTION_MARKER_TEXTURES = {
+  bridge: 'Ge_Air_Strip-Bridge_B.png',
+  airStrip: 'Ge_Air_Strip-Bridge_F.png',
+} as const
 
-/** 专规 3.5：建造标记算子的图 URL（`markers` 目录） */
-export function constructionMarkerImageUrl(): string {
-  return markerTextureUrl(CONSTRUCTION_MARKER_TEXTURE)
+/** 专规 3.5：建造标记算子的图 URL（`markers` 目录；按桥 / 简易机场取面） */
+export function constructionMarkerImageUrl(kind: 'bridge' | 'airStrip'): string {
+  return markerTextureUrl(CONSTRUCTION_MARKER_TEXTURES[kind])
 }
 
 /**
- * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：共 14 张，量小）
+ * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：约 15 张，量小）
  *
  * 这些贴图与盘面无关（模式标记 / 工事等级），故不随覆盖层变化反复预载。
  */
@@ -225,8 +229,8 @@ export function allMarkerTextureUrls(): string[] {
     ...MARKER_TEXTURES.hedgehog.map((file) => markerTextureUrl(file)),
     // 13.3d：铁路端头标记（`mk-38`，`setup.railheads` 播种后即画）
     markerTextureUrl(RAILHEAD_TEXTURE),
-    // 专规 3.5：建造标记算子（桥 / 简易机场共用一面）
-    constructionMarkerImageUrl(),
+    // 专规 3.5：建造标记算子（桥 / 简易机场各一面）
+    ...Object.values(CONSTRUCTION_MARKER_TEXTURES).map((file) => markerTextureUrl(file)),
   ]
 }
 

@@ -42,6 +42,7 @@ import {
   type ZocOverlay,
 } from '@/render/token-layer'
 import type { EdgeBandPiece } from '@/render/map-render'
+import { constructionMarkerBadges } from '@/render/map-render'
 import {
   defaultSelectionOf,
   hitStackFan,
@@ -1595,6 +1596,35 @@ export const useMapViewStore = defineStore('mapView', () => {
     return showCounterContext(hex, [instanceId], anchor)
   }
 
+  /**
+   * 专规 3.5：点中建造标记的**简易机场贴片** ⇒ 与普通空军基地一样打开驻机名册
+   *
+   * 标记不是算子（不进 `tokens`），故这里按绘制同源的贴片几何命中；点到同一格的别的区域仍走
+   * 原有堆叠/移动分派。只在本方（轴方）基地可操作时接管，敌方观察视角保持只读信息。
+   */
+  function openConstructionMarkerAirstripAtPoint(world: { x: number; y: number }): boolean {
+    const pieces = workbench.constructionMarkerPieces.filter((piece) => piece.kind === 'airStrip')
+    if (pieces.length === 0) return false
+    const badge = constructionMarkerBadges(pieces).find(
+      (item) => Math.hypot(world.x - item.center.x, world.y - item.center.y) <= item.side / 2,
+    )
+    if (badge === undefined) return false
+    const piece = pieces.find(
+      (item) => item.hex.col === badge.hex.col && item.hex.row === badge.hex.row,
+    )
+    if (piece === undefined) return false
+    const base = workbench.ownAirBases.find(
+      (item) => item.id === workbench.constructionMarkerAirBaseId(piece.id),
+    )
+    if (base === undefined) return false
+    unitActionIntent.value = null
+    unitActionHex.value = { ...base.hex }
+    unitActionUnitId.value = base.id
+    reduceTargetBaseId.value = null
+    closePopup()
+    return true
+  }
+
   function canSelectCounterAt(instanceId: string): boolean {
     const unit = workbench.units.find((item) => item.instanceId === instanceId)
     return (
@@ -1864,6 +1894,28 @@ export const useMapViewStore = defineStore('mapView', () => {
     return []
   })
 
+  /**
+   * 2026-11-26：右键已选中的**具工程能力单位** ⇒ 地图上直接铺出它此刻能施工的**格全集**
+   *
+   * 与「窗口里再列一遍全部工程兵」互斥：玩家已经在右键时选定了施工者，这里只回答"它能动哪些格"。
+   * 目标格一旦点定，就不再铺全集，只留 `actionTargetHexes` 那一格 + 之后的付款站高亮。
+   */
+  const engineerActionCandidateHexes = computed<readonly HexRef[]>(() => {
+    const intent = unitActionIntent.value
+    if (intent === null) return []
+    if (intent.only === 'airstrip') {
+      return workbench.constructionTargetHex === null
+        ? workbench.airConstructionCandidateHexes(workbench.airConstructionTask)
+        : []
+    }
+    if (intent.only === 'hedgehog') {
+      return workbench.hedgehogTargetHex === null
+        ? workbench.hedgehogCandidateHexes(workbench.hedgehogWindowTask)
+        : []
+    }
+    return []
+  })
+
   /** 地图多格高亮 = 既有「待点格」＋ 炮击第 1 步的参炸炮兵格 ＋ 动作窗目标格 */
   const mapHighlightHexes = computed<readonly HexRef[]>(() => {
     const seen = new Set<string>()
@@ -1871,6 +1923,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     for (const hex of [
       ...workbench.variableExitPickHexes,
       ...opsBarrageUnitHexes.value,
+      ...engineerActionCandidateHexes.value,
       ...actionTargetHexes.value,
     ]) {
       const key = `${hex.col}.${hex.row}`
@@ -2583,6 +2636,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     const hex = unitActionHex.value
     if (hex === null) return null
     const pinned = unitActionUnitId.value
+    /*
+     * 专规 3.5：建造标记的简易机场没有独立算子，`ownAirBases` 里是一条虚拟基地记录。
+     * 它已通过 `openConstructionMarkerAirstripAtPoint` 的点选进入这里；驻机名册/整备/任务
+     * 与普通空军基地同走 `air` 面板（3.5 明文限制仍由各自动作自己把关）。
+     */
+    if (pinned !== null && workbench.isConstructionMarkerAirBaseId(pinned)) return 'air'
     const unit =
       pinned === null
         ? workbench.units.find(
@@ -5011,6 +5070,42 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 2026-11-26：点中工程候选格 ⇒ 写目标 + **直接进入付款补给步**
+   *
+   * 右键开窗时已经把施工者、任务定死；这里不再要求玩家回窗里点「点地图选格」或「在地图上选付款站」。
+   * 付款站仍由玩家在地图上点（12.3a/12.3b）——本函数只把选站模式打开。
+   */
+  function pickEngineerActionTargetAtHex(hex: HexRef): boolean {
+    const intent = unitActionIntent.value
+    if (intent === null) return false
+    const hexText = `${hex.col}.${hex.row}`
+    if (intent.only === 'airstrip') {
+      const candidates = workbench.airConstructionCandidateHexes(workbench.airConstructionTask)
+      if (!candidates.some((item) => item.col === hex.col && item.row === hex.row)) return false
+      workbench.constructionInputs = {
+        ...workbench.constructionInputs,
+        hexText,
+        payDumpId: null,
+      }
+      workbench.constructionError = null
+      // 15.3 / 15.2A 三个任务都要付款；没有可达补给站时 toggle 会给话术并保持关闭。
+      if (!workbench.constructionPayPick) workbench.toggleConstructionPayPick()
+      return true
+    }
+    if (intent.only === 'hedgehog') {
+      const candidates = workbench.hedgehogCandidateHexes(workbench.hedgehogWindowTask)
+      if (!candidates.some((item) => item.col === hex.col && item.row === hex.row)) return false
+      workbench.hedgehogInputs = { ...workbench.hedgehogInputs, hexText, payDumpId: null }
+      workbench.hedgehogError = null
+      // 16.0c 缩减免费；16.0b 修建才需要付款站。
+      if (workbench.hedgehogWindowTask === 'build' && !workbench.hedgehogPayPick)
+        workbench.toggleHedgehogPayPick()
+      return true
+    }
+    return false
+  }
+
+  /**
    * 点地图（地图优先交互的**唯一入口**）
    *
    * ★ B26 重排（用户报告「一次点击出现两个框」「点堆叠总是默认移动第一枚」「炮击选不中炮兵」）：
@@ -5114,6 +5209,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
+    // 2026-11-26：工程窗开着且尚未定目标 ⇒ 点高亮候选格即写目标并直接进入付款选站
+    if (pickEngineerActionTargetAtHex(hex)) {
+      closePopup()
+      return
+    }
     if (workbench.fuelSubjectId !== null) {
       const payDump = workbench.fuelDumpChoices.find(
         (item) => item.hex.col === hex.col && item.hex.row === hex.row,
@@ -5136,6 +5236,9 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
+    // 专规 3.5：点建造标记的简易机场贴片 ⇒ 与普通空军基地同一入口（驻机名册 / 整备 / 任务）
+    if (!modalPickLive && world !== undefined && openConstructionMarkerAirstripAtPoint(world))
+      return
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // 初设 †：已选中堆叠里的某一枚 ⇒ 点目标格即散开（越界/超堆叠由 store 拒绝并留原因）
     if (setup.stackDisperse !== null && setup.moveStackUnitAtHex(hex)) {
