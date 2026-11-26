@@ -196,9 +196,9 @@ function hoverUnit(id: string | null): void {
   workbench.setHoverHex(unit?.hex ?? null)
 }
 
-/** 悬停某一座补给站 ⇒ 同步地图高亮 */
+/** 悬停某一座补给站 ⇒ 同步地图高亮（账本/行动方列表口径可能不同，按全量 SP 位置查） */
 function hoverDump(id: string | null): void {
-  const dump = id === null ? null : (workbench.spDumpsOfSide.find((item) => item.id === id) ?? null)
+  const dump = id === null ? null : (workbench.allSpDumps.find((item) => item.id === id) ?? null)
   workbench.setHoverHex(dump?.hex ?? null)
 }
 

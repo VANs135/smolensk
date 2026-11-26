@@ -2,8 +2,8 @@
  * 训练投影的版本与数据形状（TS ↔ Python 的训练交接面）
  *
  * 与 `src/ai/trace.ts` 的 `AI_IO_VERSION` 分开：
- * - `AI_IO_VERSION = 1` 仍描述现有运行时 trace（`AiSnapshot` / `AiStepRecord`）；
- * - `AI_TRAIN_VERSION = 2` 描述**训练专用**的稳定投影（实体 roster + 规范化观测 + canonical key）。
+ * - `AI_IO_VERSION = 2` 仍描述现有运行时 trace（`AiSnapshot` / `AiStepRecord`）；
+ * - `AI_TRAIN_VERSION = 3` 描述**训练专用**的稳定投影（实体 roster + 规范化观测 + canonical key）。
  *
  * 为什么不用同一个号：现有 trace 的生产者/消费者（界面、日志、既有测试）没有变化；
  * 训练投影是新增消费者。两个契约分开演进，避免为训练改坏运行时 trace。
@@ -11,7 +11,7 @@
 
 import type { AiHex, AiSide } from '../policy'
 
-export const AI_TRAIN_VERSION = 2
+export const AI_TRAIN_VERSION = 3
 
 /** 训练投影里的实体类别（只用于特征分组，不参与规则判定） */
 export type TrainingEntityKind = 'ground' | 'air' | 'dump' | 'base'

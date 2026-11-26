@@ -89,7 +89,7 @@ describe('观测导出与序列化', () => {
     const ctx = startIntro(SEED)
     const snap = snapshotOf(ctx, createAiMemory(), 'both')
     const serialized = serializeObservation(snap)
-    expect(AI_IO_VERSION).toBe(1)
+    expect(AI_IO_VERSION).toBe(2)
     expect(Array.isArray(serialized.can)).toBe(true)
     const can = serialized.can as string[]
     expect([...can].sort((a, b) => a.localeCompare(b))).toEqual(can)

@@ -17,10 +17,11 @@ import type { AiAction, AiControlMode, AiSnapshot } from './policy'
  * 观测版本号
  *
  * 1：2026-11-25 首版（`AiSnapshot` 全量 + `can` 转字符串数组）
+ * 2：2026-11-26 增加 `branch.dumpBlow`（12.11a 销毁补给站候选）
  *
  * 改 `AiSnapshot` 的字段、含义、取值范围都要 +1；训练数据与模型文件都记这个号。
  */
-export const AI_IO_VERSION = 1
+export const AI_IO_VERSION = 2
 
 /** 一局元信息（JSONL 的首行；采集器负责填 `ep` / `seed` / 时间） */
 export interface AiEpisodeMeta {
