@@ -288,10 +288,15 @@ function resetPosition(): void {
   /* 默认停在地图窗口右上角（用户口径：以免挡视线）；拖动只改 transform 的平移量 */
   position: absolute;
   top: var(--space-3);
-  right: var(--space-3);
+  /*
+   * 2026-11-26：右上角的缩放簇（30×30 按钮 + 4px 内边距 + 1px 边框 = 40px 宽，
+   * 贴 right 8px）先占住最右 48px；会话框默认位再右贴 12px 会被它压住标题栏与 ×。
+   * 故默认位向右让开 40px，保留 4px 间隙。
+   */
+  right: calc(var(--space-3) + 40px);
   z-index: var(--layer-map-popup);
   max-height: min(68vh, calc(100% - 2 * var(--space-3)));
-  max-width: calc(100% - 2 * var(--space-3));
+  max-width: calc(100% - 2 * var(--space-3) - 40px);
   display: flex;
   flex-direction: column;
   background: var(--color-panel);

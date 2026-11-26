@@ -1143,10 +1143,11 @@ onBeforeUnmount(() => {
 }
 
 .gt__rail {
-  /* 2026-11-25：左栏的存档是常用入口 ⇒ 待答遮罩（`.prompt`，200）不得盖住它：抬到 210，
-     仍低于模式闸门 250 与 toast 300；浮窗/会话框（20）不受影响 */
+  /* 2026-11-26：左栏是页面布局的一部分，不得越过模态层闸门（--z-panel: 200）。
+     它只需压住地图内浮窗（--layer-map-popup: 20），故回到 --layer-shell: 30；
+     待答遮罩 / BaseDialog 打开时会正常盖住左栏。 */
   position: relative;
-  z-index: calc(var(--z-panel) + 10);
+  z-index: var(--layer-shell);
   display: flex;
   flex-direction: column;
   /* 2026-11-26（用户「各宽度减小」）：栏宽 62 → 46、按钮 44 → 34（回到 v5 小样 46/34/图标 22），

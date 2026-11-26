@@ -42,6 +42,17 @@ describe('P6：折叠右栏回收列宽（源码守卫）', () => {
     expect(game).not.toContain('gt__tray-dock')
   })
 
+  it('P2：左栏不越过模态层闸门（≤ --z-panel: 200）', () => {
+    const game = readFileSync('src/views/GameTableView.vue', 'utf8')
+    expect(game).not.toMatch(/\.gt__rail\s*\{[^}]*z-index:\s*calc\(var\(--z-panel\)\s*\+\s*10\)/s)
+    expect(game).toMatch(/\.gt__rail\s*\{[^}]*z-index:\s*var\(--layer-shell\)/s)
+  })
+
+  it('P2：会话框默认位给右上角缩放簇让开 40px', () => {
+    const dock = readFileSync('src/components/map/MapDock.vue', 'utf8')
+    expect(dock).toMatch(/\.dock\s*\{[^}]*right:\s*calc\(var\(--space-3\)\s*\+\s*40px\)/s)
+  })
+
   it('无调试标识', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     expect(game).not.toContain('console.log')
