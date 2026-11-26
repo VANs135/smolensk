@@ -34,6 +34,7 @@
     "audit:clauses": "node scripts/audit-clause-prefix.mjs --fail",
     "audit:error-text": "node scripts/audit-error-text.mjs --fail-unmapped",
     "probe:ui": "node scripts/probe-ui.mjs",
+    "collect:ai": "node scripts/collect.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
     "prepare": "node scripts/install-hooks.mjs"
   },
