@@ -93,6 +93,9 @@ describe('训练观测的 ID 归一化', () => {
     const observation = trainingObservationOf(snap, identity)
     const json = JSON.stringify(observation)
 
+    const entityIds = observation.entities.map((entity) => entity.id)
+    expect(new Set(entityIds).size).toBe(entityIds.length)
+
     const rawUnitIds = ctx.workbench.units.map((unit) => unit.instanceId)
     const rawDumpIds = ctx.workbench.allSpDumps.map((dump) => dump.id)
     for (const raw of [...rawUnitIds, ...rawDumpIds]) {
@@ -108,6 +111,19 @@ describe('训练观测的 ID 归一化', () => {
     )
     expect(key).toContain(identity.stableOf(unit.instanceId))
     expect(key).not.toContain(unit.instanceId)
+  })
+
+  it('同名地面/基地原始 id 分桶，不共用别名', () => {
+    const ctx = startIntro(SEED)
+    const identity = createTrainingIdentity(ctx)
+    const base = ctx.workbench.airBases[0]
+    expect(base).toBeDefined()
+    if (base === undefined) return
+    const sameRawUnit = ctx.workbench.units.find((unit) => unit.instanceId === base.id)
+    expect(sameRawUnit).toBeDefined()
+    expect(identity.stableOf(base.id).startsWith('u:')).toBe(true)
+    expect(identity.baseOf(base.id).startsWith('b:')).toBe(true)
+    expect(identity.stableOf(base.id)).not.toBe(identity.baseOf(base.id))
   })
 
   it('同 seed 两套独立 Pinia：前 12 步 canonical key 与观测一致', () => {
