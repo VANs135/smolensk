@@ -43,6 +43,9 @@ const tutorial = useTutorialStore()
 /** 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**） */
 const presetResult = ref<PresetSetupResult | null>(null)
 
+/** 「放弃以上未布设单位」勾选。必须早于下方 immediate watch 声明，否则初设面板一挂载就 TDZ 崩。 */
+const omitConfirmed = ref(false)
+
 function runPresetSetup(): void {
   presetResult.value = setup.presetSelfSetupNow()
 }
@@ -263,7 +266,6 @@ const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total 
 
 /** 当前正在地图上选落点的那一项（null = 没在放） */
 const placing = computed(() => setup.placing)
-const omitConfirmed = ref(false)
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
