@@ -18,9 +18,21 @@
  *   --include-refused  连被引擎拒绝的步也写入（默认写，便于诊断）
  *   --quiet     不打印每步进度
  */
+import { execSync } from 'node:child_process'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createServer } from 'vite'
+
+function currentCommit() {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 function parseArgs(argv) {
   const args = {}
@@ -65,6 +77,18 @@ async function main() {
     const { createTrainingEnv } = await server.ssrLoadModule('/src/ai/training/env.ts')
     const { decideAiAction } = await server.ssrLoadModule('/src/ai/policy.ts')
     const { AI_TRAIN_VERSION } = await server.ssrLoadModule('/src/ai/training/contract.ts')
+
+    stream.write(
+      `${JSON.stringify({
+        type: 'meta',
+        version: AI_TRAIN_VERSION,
+        commit: currentCommit(),
+        scenarioId,
+        seed,
+        episodes,
+        maxSteps: steps,
+      })}\n`,
+    )
 
     for (let episode = 0; episode < episodes; episode += 1) {
       const episodeSeed = seed + episode
