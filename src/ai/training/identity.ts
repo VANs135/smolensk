@@ -7,11 +7,13 @@
  *
  *   ground  u:<side>:<unitId>:<copy#>
  *   air     a:<side>:<aircraftId>:<copy#>
- *   dump    d:<side>:<c.r>:<sp>:<t>:<copy#>
+ *   dump    d:<side>:ground:<c.r>:<copy#>（地面站）/ d:<side>:carrier:<unit alias>:<copy#>（装载点）
  *   base    b:<side>:<c.r>:<copy#>
  *
  * ★ 别名只用于训练投影；执行动作仍用原始 action，由候选表持有 key → action 的映射。
  * ★ 新增实体必须在下一次 observe 前 `refresh()`，否则动作 key 会退回原始实例 id。
+ * ★ 死亡堆与盘面单位共用 `instanceId` 命名空间，也必须登记；`rebuild` 的 unitId 来自死亡堆。
+ * ★ 补给站别名不含 `sp/t`：持仓变化不改站身份；装载点在运输点上的 SP 跟随承运单位。
  * ★ 地面单位 / 空军基地可能共用同一个原始 id（如 `neutral-airbase` 既是地面堆叠，也是基地）；
  *   故别名按 kind 分桶，`baseId` / `dumpId` 字段由 `aliasFor()` 分流，避免同一别名覆盖两种实体。
  */
@@ -96,7 +98,7 @@ export function createTrainingIdentity(ctx: AiContext): TrainingIdentity {
   }
 
   function refresh(): void {
-    // 先地面/飞机，再补给站/基地；顺序只影响同一轮新增实体的别名序号，不改变任何规则判断。
+    // 先地面/飞机，再死亡堆/补给站/基地；顺序只影响同一轮新增实体的别名序号，不改变任何规则判断。
     for (const unit of w.units) {
       register(
         {
@@ -121,13 +123,52 @@ export function createTrainingIdentity(ctx: AiContext): TrainingIdentity {
         unitAliases,
       )
     }
+    /*
+     * 死亡堆与盘面单位共用 `instanceId` 命名空间，但不在 `w.units` / `w.airUnits` 里。
+     * `rebuild` 的 `unitId` 直接来自死亡堆；不先登记就只能回退原始 `instanceId`，
+     * 训练 key 会跨进程分叉。地面/空军都按各自库键登记到 unit 别名表。
+     */
+    for (const dead of w.deadPile) {
+      if ('aircraftId' in dead) {
+        register(
+          {
+            raw: dead.instanceId,
+            kind: 'a',
+            side: dead.side,
+            stableKey: dead.aircraftId,
+          },
+          'unit',
+          unitAliases,
+        )
+      } else {
+        register(
+          {
+            raw: dead.instanceId,
+            kind: 'u',
+            side: dead.side,
+            stableKey: dead.unitId,
+          },
+          'unit',
+          unitAliases,
+        )
+      }
+    }
     for (const dump of w.allSpDumps) {
+      /*
+       * 补给站身份不能含 `sp/t`：扣款、装载、拆分都会改持仓，但仍是同一个站。
+       * 地面站按 `side + hex` 分桶；装在运输点上的 SP 跟着承运单位走，
+       * 用承运单位的稳定别名，避免车一动就换身份。
+       */
+      const stableKey =
+        dump.carriedBy === undefined
+          ? `ground:${hexKey(dump.hex)}`
+          : `carrier:${stableOf(dump.carriedBy)}`
       register(
         {
           raw: dump.id,
           kind: 'd',
           side: dump.side,
-          stableKey: `${hexKey(dump.hex)}:${String(dump.sp)}:${String(dump.t)}`,
+          stableKey,
         },
         'dump',
         dumpAliases,

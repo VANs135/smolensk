@@ -52,6 +52,11 @@ export interface TrainingEnvOptions {
   maxSetupSteps?: number
   /** 单局步数上限；0 表示只由会话终止/调用方停止 */
   maxSteps?: number
+  /**
+   * 连续空转上限：连续多少步盘面稳定状态不变就截断（无论引擎是否接受该动作）。
+   * 0 表示关闭。默认 50；p5 的 combat 段曾在同一批候选上空转 9000 步。
+   */
+  maxNoopSteps?: number
 }
 
 export interface TrainingStepInfo extends AiStepResult {
@@ -61,6 +66,14 @@ export interface TrainingStepInfo extends AiStepResult {
   executedKey: string
   /** 本次动作的 canonical key（训练动作表用） */
   actionKey: string
+  /** 扣掉 policy tried 缓存后，盘面稳定状态是否变化 */
+  stateChanged: boolean
+  /** 盘面稳定状态没变（无论引擎是否接受本次动作；重复选同一候选时两者都会发生） */
+  noop: boolean
+  /** 截至本步的连续空转计数；有实际变化即归零 */
+  noopSteps: number
+  /** 是否因连续空转达到 `maxNoopSteps` 而截断 */
+  stalled: boolean
   /** 本步后是否截断（达到 maxSteps） */
   truncated: boolean
 }
@@ -113,11 +126,15 @@ interface EnvState {
   memory: AiMemory
   checkpoint: TrainingCheckpoint | null
   options: Required<
-    Pick<TrainingEnvOptions, 'scenarioId' | 'seed' | 'control' | 'maxSetupSteps' | 'maxSteps'>
+    Pick<
+      TrainingEnvOptions,
+      'scenarioId' | 'seed' | 'control' | 'maxSetupSteps' | 'maxSteps' | 'maxNoopSteps'
+    >
   >
   started: boolean
   done: boolean
   steps: number
+  noopSteps: number
 }
 
 function normalizeOptions(
@@ -135,7 +152,38 @@ function normalizeOptions(
     control: override?.control ?? defaults?.control ?? 'both',
     maxSetupSteps: override?.maxSetupSteps ?? defaults?.maxSetupSteps ?? 500,
     maxSteps: override?.maxSteps ?? defaults?.maxSteps ?? 0,
+    maxNoopSteps: override?.maxNoopSteps ?? defaults?.maxNoopSteps ?? 50,
   }
+}
+
+/** 这些字段是 policy 的「本环节试过什么」，不是盘面状态；比较空转时必须剔除。 */
+function dropPolicyBookkeeping(value: unknown, keys: readonly string[]): void {
+  if (value === null || typeof value !== 'object') return
+  for (const key of keys) Reflect.deleteProperty(value, key)
+}
+
+/**
+ * 盘面稳定状态（去掉 policy tried 缓存）
+ *
+ * `AiSnapshot` 里的 `move.triedUnits` / `combat.triedDefenderHexes` 等会因一次被拒动作而变化；
+ * 把这些字段算进 `stateChanged` 会把「真的没动盘面」误判成有效步，p5 的 9000 步空转就是这样漏掉的。
+ * 这里先做 JSON 克隆再按路径删字段，其余字段仍按 `stableStateOf` 的稳定键序比较。
+ */
+function boardStateJson(state: Record<string, unknown>): string {
+  const clone = JSON.parse(JSON.stringify(state)) as Record<string, unknown>
+  dropPolicyBookkeeping(clone, ['reserveTriedUnitIds', 'reserveReleasedUnitIds'])
+  const move = clone.move
+  dropPolicyBookkeeping(move, ['triedUnits', 'triedTargets'])
+  const barrage = clone.barrage
+  dropPolicyBookkeeping(barrage, ['triedTargets'])
+  const combat = clone.combat
+  dropPolicyBookkeeping(combat, ['triedDefenderHexes'])
+  const fuel = clone.fuel
+  dropPolicyBookkeeping(fuel, ['triedUnitIds'])
+  const air = clone.air
+  // 目标列表按 memory.airTargets 过滤；被拒一次就会换列表，不能当作盘面变化。
+  dropPolicyBookkeeping(air, ['targets', 'target'])
+  return JSON.stringify(clone)
 }
 
 /**
@@ -198,6 +246,7 @@ function bootstrap(options: EnvState['options']): EnvState {
     started: true,
     done: session.terminated,
     steps: 0,
+    noopSteps: 0,
   }
 }
 
@@ -274,6 +323,7 @@ export function createTrainingEnv(defaults: TrainingEnvOptions): TrainingEnv {
       // 记忆里可能挂着上一段的动作/事实；回滚后必须换新，不能把旧状态带进下一段。
       current.memory = createAiMemory()
       current.steps = 0
+      current.noopSteps = 0
       current.done = current.ctx.session.terminated
       current.identity.refresh()
     },
@@ -309,12 +359,19 @@ export function createTrainingEnv(defaults: TrainingEnvOptions): TrainingEnv {
         snapshotOf(current.ctx, current.memory, current.options.control),
         current.identity,
       )
+      const stateChanged = boardStateJson(before.state) !== boardStateJson(after.state)
+      const noop = !stateChanged
+      current.noopSteps = noop ? current.noopSteps + 1 : 0
       const actionKey = canonicalActionKeyOf(action, current.identity.actionIds)
       const truncated =
         current.options.maxSteps > 0 &&
         current.steps >= current.options.maxSteps &&
         !current.ctx.session.terminated
-      current.done = current.ctx.session.terminated || truncated
+      const stalled =
+        current.options.maxNoopSteps > 0 &&
+        current.noopSteps >= current.options.maxNoopSteps &&
+        !current.ctx.session.terminated
+      current.done = current.ctx.session.terminated || truncated || stalled
       const executedRecord = captured.step
       const info: TrainingStepInfo = {
         ...result,
@@ -324,6 +381,10 @@ export function createTrainingEnv(defaults: TrainingEnvOptions): TrainingEnv {
             ? actionKey
             : canonicalActionKeyOf(executedRecord.act, current.identity.actionIds),
         actionKey,
+        stateChanged,
+        noop,
+        noopSteps: current.noopSteps,
+        stalled,
         truncated,
       }
       return {

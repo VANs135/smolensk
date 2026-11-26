@@ -126,6 +126,59 @@ describe('训练观测的 ID 归一化', () => {
     expect(identity.stableOf(base.id)).not.toBe(identity.baseOf(base.id))
   })
 
+  it('死亡堆单位登记稳定别名，rebuild key 不泄漏 instanceId', () => {
+    const ctx = startIntro(SEED)
+    const live = ctx.workbench.units.find((unit) => unit.side === 'axis')
+    expect(live).toBeDefined()
+    if (live === undefined) return
+    const dead = { ...live, instanceId: 'dead-test-instance', unitId: 'dead-test-lib' }
+    ctx.workbench.deadPile.push(dead)
+
+    const identity = createTrainingIdentity(ctx)
+    const alias = identity.stableOf('dead-test-instance')
+    expect(alias).not.toBe('dead-test-instance')
+    expect(alias.startsWith('u:')).toBe(true)
+    const key = canonicalActionKeyOf(
+      { kind: 'rebuild', unitId: 'dead-test-instance', mode: 'dead', hex: null },
+      identity.actionIds,
+    )
+    expect(key).not.toContain('dead-test-instance')
+    expect(key).toContain(alias)
+  })
+
+  it('补给站别名不随 sp/t 变化；装载点跟随承运单位别名', () => {
+    const ctx = startIntro(SEED)
+    ctx.workbench.spDumps.push({
+      id: 'sp-test-dump',
+      hex: { col: 0, row: 0 },
+      side: 'axis',
+      sp: 4,
+      t: 0,
+    })
+    const carrier = ctx.workbench.units.find((unit) => unit.side === 'axis')
+    expect(carrier).toBeDefined()
+    if (carrier === undefined) return
+    carrier.loadedSpT = 8
+    const identity = createTrainingIdentity(ctx)
+    const groundAlias = identity.stableOf('sp-test-dump')
+    const carriedAlias = identity.stableOf(`unit:${carrier.instanceId}`)
+    expect(groundAlias.startsWith('d:')).toBe(true)
+    expect(carriedAlias.startsWith('d:')).toBe(true)
+
+    const dump = ctx.workbench.spDumps.find((item) => item.id === 'sp-test-dump')
+    expect(dump).toBeDefined()
+    if (dump === undefined) return
+    dump.sp = 0
+    dump.t = 2
+    carrier.loadedSpT = 4
+    identity.refresh()
+    expect(identity.stableOf('sp-test-dump')).toBe(groundAlias)
+    expect(identity.stableOf(`unit:${carrier.instanceId}`)).toBe(carriedAlias)
+    expect(identity.stableOf(`unit:${carrier.instanceId}`)).toContain(
+      identity.stableOf(carrier.instanceId),
+    )
+  })
+
   it('同 seed 两套独立 Pinia：前 12 步 canonical key 与观测一致', () => {
     const run = (): { keys: string[]; observations: string[] } => {
       const ctx = startIntro(SEED)

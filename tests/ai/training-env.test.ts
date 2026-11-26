@@ -29,6 +29,8 @@ describe('TrainingEnv', () => {
     const step = env.step({ kind: 'advance' })
     expect(step.done).toBe(false)
     expect(step.info.actionKey).toBe('advance')
+    expect(step.info.stateChanged).toBe(true)
+    expect(step.info.noop).toBe(false)
     expect(step.observation.version).toBe(AI_TRAIN_VERSION)
     expect(env.steps).toBe(1)
     expect(JSON.stringify(env.observe())).toBe(JSON.stringify(step.observation))
@@ -36,6 +38,29 @@ describe('TrainingEnv', () => {
     const reset = env.reset()
     expect(JSON.stringify(reset)).toBe(JSON.stringify(initial))
     expect(env.steps).toBe(0)
+  })
+
+  it('wait 被识别为 noop；连续空转达到上限即 stalled', () => {
+    const env = createTrainingEnv({
+      scenarioId: 'Intro',
+      seed: 20261126,
+      maxNoopSteps: 2,
+    })
+    env.reset()
+    const first = env.step({ kind: 'wait', reason: '空转用例 1' })
+    // `wait` 在 driver 里恒为 ok=false，但盘面没有任何变化，仍应计作空转。
+    expect(first.info.ok).toBe(false)
+    expect(first.info.noop).toBe(true)
+    expect(first.info.stateChanged).toBe(false)
+    expect(first.info.noopSteps).toBe(1)
+    expect(first.done).toBe(false)
+
+    const second = env.step({ kind: 'wait', reason: '空转用例 2' })
+    expect(second.info.noop).toBe(true)
+    expect(second.info.noopSteps).toBe(2)
+    expect(second.info.stalled).toBe(true)
+    expect(second.done).toBe(true)
+    expect(() => env.step({ kind: 'advance' })).toThrow(/reset/)
   })
 
   it('maxSteps 截断不依赖会话终止', () => {
