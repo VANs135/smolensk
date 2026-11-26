@@ -34,6 +34,8 @@ import { useHotseatStore } from '@/stores/hotseat'
 import { useSetupStore } from '@/stores/setup'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { canonicalActionKeyOf } from './action-key'
+import type { TrainingCandidate } from './candidates'
+import { candidateActionsOf } from './candidates'
 import type { TrainingObservation } from './contract'
 import { createTrainingIdentity, type TrainingIdentity } from './identity'
 import { trainingObservationOf } from './serialize'
@@ -83,6 +85,8 @@ export interface TrainingEnv {
   step(action: AiAction): TrainingStepResult
   /** 动作 → canonical key（候选表/日志用） */
   actionKey(action: AiAction): string
+  /** 当前快照下的候选动作（v1；不是穷举合法动作） */
+  candidates(): TrainingCandidate[]
   /** 只读快照（不含训练投影；诊断用） */
   snapshot(): AiSnapshot
 }
@@ -225,6 +229,14 @@ export function createTrainingEnv(defaults: TrainingEnvOptions): TrainingEnv {
     },
     actionKey(action) {
       return canonicalActionKeyOf(action, ensure().identity.actionIds)
+    },
+    candidates() {
+      const current = ensure()
+      current.identity.refresh()
+      return candidateActionsOf(
+        snapshotOf(current.ctx, current.memory, current.options.control),
+        current.identity,
+      )
     },
     step(action) {
       const current = ensure()

@@ -46,4 +46,21 @@ describe('TrainingEnv', () => {
     expect(step.info.truncated).toBe(true)
     expect(() => env.step({ kind: 'advance' })).toThrow(/reset/)
   })
+
+  it('候选表键唯一，且至少给出可执行的 advance', () => {
+    const env = createTrainingEnv({ scenarioId: 'Intro', seed: 20261126 })
+    env.reset()
+    const candidates = env.candidates()
+    expect(candidates.length).toBeGreaterThan(0)
+    const keys = candidates.map((candidate) => candidate.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const candidate of candidates) {
+      expect(candidate.key).toBe(env.actionKey(candidate.action))
+    }
+    const advance = candidates.find((candidate) => candidate.family === 'advance')
+    expect(advance).toBeDefined()
+    if (advance === undefined) return
+    const result = env.step(advance.action)
+    expect(result.info.ok).toBe(true)
+  })
 })
