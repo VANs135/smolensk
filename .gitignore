@@ -2,6 +2,7 @@
 node_modules/
 dist/
 release/
+.training-bundle/
 coverage/
 
 # 桌面壳（Tauri）：Rust 编译产物与本机生成物不入库

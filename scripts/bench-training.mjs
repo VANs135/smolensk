@@ -18,7 +18,11 @@ import { cpus, freemem, totalmem } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createServer } from 'vite'
+import {
+  DEFAULT_TRAINING_BUNDLE,
+  ensureTrainingBundle,
+  loadTrainingRuntime,
+} from './lib/training-runtime.mjs'
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url)
 
@@ -102,7 +106,7 @@ function workerList(args) {
 }
 
 function makeWorkerArgs(options, workerIndex, workerTotal) {
-  return [
+  const args = [
     `--scenario=${options.scenarioId}`,
     `--steps=${String(options.steps)}`,
     `--episodes=${String(options.episodes)}`,
@@ -112,6 +116,9 @@ function makeWorkerArgs(options, workerIndex, workerTotal) {
     `--worker-total=${String(workerTotal)}`,
     `--quiet`,
   ]
+  if (options.bundlePath === null) args.push('--no-bundle')
+  else args.push(`--bundle=${options.bundlePath}`)
+  return args
 }
 
 function prepareWorker(options, workerIndex, workerTotal, timeoutMs) {
@@ -222,6 +229,7 @@ async function runLevel(options, workers) {
 
   return {
     workers,
+    runtime: workerResults[0]?.runtime ?? 'unknown',
     startupWallMs: round(startupWallMs),
     wallMs: round(wallMs),
     totalSteps,
@@ -300,10 +308,17 @@ async function runParent(args) {
     seed: positiveInt(args, 'seed', 20261126),
     timeoutMs: positiveInt(args, 'timeout-ms', 900_000),
     outPath: resolve(valueArg(args, 'out', 'E:/OCS/工作文件/ai-data/bench-training.json')),
+    bundlePath:
+      args['no-bundle'] === true
+        ? null
+        : typeof args.bundle === 'string'
+          ? resolve(args.bundle)
+          : DEFAULT_TRAINING_BUNDLE,
     quiet: args.quiet === true,
   }
   const levels = workerList(args)
   mkdirSync(dirname(options.outPath), { recursive: true })
+  if (options.bundlePath !== null) await ensureTrainingBundle(options.bundlePath)
 
   const report = {
     type: 'bench',
@@ -314,6 +329,7 @@ async function runParent(args) {
     stepsPerEpisode: options.steps,
     episodes: options.episodes,
     warmupSteps: options.warmup,
+    runtime: options.bundlePath === null ? 'vite-ssr' : 'bundle',
     cpu: cpuInfo(),
     runs: [],
   }
@@ -342,20 +358,6 @@ async function runParent(args) {
   }
 }
 
-async function relaxSsrTransport(server) {
-  const apply = (runner) => {
-    if (runner?.transport !== undefined) runner.transport.timeout = 600_000
-  }
-  apply(server.environments?.ssr?.runner)
-  /*
-   * `ssrLoadModule` 用的是 `_ssrCompatModuleRunner`，它自己 new 了一个 transport，
-   * 和 environment.runner 不是同一个对象；先加载轻量模块实例化 runner，再放宽超时。
-   */
-  if (server._ssrCompatModuleRunner === undefined)
-    await server.ssrLoadModule('/src/ai/training/contract.ts')
-  apply(server._ssrCompatModuleRunner)
-}
-
 async function runWorker(args) {
   const workerIndex = nonNegativeInt(args, 'worker-index', 0)
   const workerTotal = positiveInt(args, 'worker-total', 1)
@@ -365,8 +367,14 @@ async function runWorker(args) {
   const warmup = positiveInt(args, 'warmup', 10)
   const seed = positiveInt(args, 'seed', 20261126) + workerIndex
   const quiet = args.quiet === true
+  const bundlePath =
+    args['no-bundle'] === true
+      ? null
+      : typeof args.bundle === 'string'
+        ? resolve(args.bundle)
+        : DEFAULT_TRAINING_BUNDLE
 
-  let server
+  let runtime = null
   let moduleLoadMs = 0
   let resetMs = 0
   let checkpointMs = 0
@@ -388,27 +396,12 @@ async function runWorker(args) {
 
   try {
     const loadStarted = performance.now()
-    server = await createServer({
-      appType: 'custom',
-      logLevel: 'error',
-      // bench 的 worker 启动是**串行**的（前一个 ready 后才起下一个），
-      // 共享同一 Vite cache 可让后续 worker 复用已编译模块；不要照搬到并发启动的采集器。
+    runtime = await loadTrainingRuntime({
+      bundlePath,
+      workerIndex,
       cacheDir: resolve('node_modules/.vite/bench-shared'),
-      server: {
-        middlewareMode: true,
-        hmr: false,
-        // Vite 在 middleware 模式仍会建 WS 服务；多 worker 必须各用各的端口。
-        ws: { port: 24678 + workerIndex },
-      },
     })
-    /*
-     * 首次编译 `src/data` 在冷缓存下可能超过 Vite 默认的 60s SSR transport 超时；
-     * 这里放宽到 10 分钟，避免把慢启动误报成模块错误。
-     */
-    await relaxSsrTransport(server)
-    const { createTrainingEnv } = await server.ssrLoadModule('/src/ai/training/env.ts')
-    const { decideAiAction } = await server.ssrLoadModule('/src/ai/policy.ts')
-    const { AI_TRAIN_VERSION } = await server.ssrLoadModule('/src/ai/training/contract.ts')
+    const { createTrainingEnv, decideAiAction, AI_TRAIN_VERSION } = runtime
     moduleLoadMs = performance.now() - loadStarted
     sampleMemory()
 
@@ -484,6 +477,7 @@ async function runWorker(args) {
     const result = {
       type: 'bench-result',
       trainVersion: AI_TRAIN_VERSION,
+      runtime: runtime?.source ?? 'unknown',
       workerIndex,
       workerTotal,
       seed,

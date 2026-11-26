@@ -17,6 +17,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'release/**',
+      '.training-bundle/**',
       'node_modules/**',
       'public/**',
       'coverage/**',
