@@ -8,14 +8,14 @@
  * v1 覆盖：
  * - 盘面提问 / 推进 / 初设 / 整备 / 到货 / 重建；
  * - 移动主链与 C 段支线（换模式、突袭、铁路、装卸、建造标记、换轨）；
- * - 空军任务、炮击、战斗结算、补给、损耗。
+ * - 空军任务、炮击、战斗结算（含补给付不出时的 `combatSkip`）、补给、损耗。
  *
  * 不覆盖 / 只给一个候选的组合：
  * - 战斗撤退多单位路径只做受控笛卡尔积（上限 32），不声称穷举；
  * - 战斗补给按快照首个补给站组合，不枚举所有「站点 × 储备」组合；
  * - 炮击/战斗的入口合法性仍交给引擎。
  */
-import type { AiAction, AiHex, AiSnapshot } from '../policy'
+import type { AiAction, AiCombatSnapshot, AiHex, AiSnapshot } from '../policy'
 import { canonicalActionKeyOf } from './action-key'
 import type { TrainingIdentity } from './identity'
 
@@ -30,6 +30,48 @@ export interface TrainingCandidate {
 }
 
 const MAX_RETREAT_COMBOS = 32
+
+/**
+ * 9.5 战斗补给步的候选（纯投影：只读 `AiCombatSnapshot`，不新增规则判据）
+ *
+ * - 攻方图上付不出整笔、又不能动储备 ⇒ 12.4「该方根本不攻击」，只给放弃战斗；
+ * - 否则给三条补给落法（双方代答 / 只答攻方 / 只答守方），并保留 `combatSkip` 这个合法出口；
+ * - 放弃只能在补给落盘前做（`combatCancelBlocker` 在 `combatSupplyCommitted` 后成立）。
+ */
+export function combatSupplyCandidates(combat: AiCombatSnapshot): AiAction[] {
+  const attackerDump = combat.attackerDumpIds[0] ?? null
+  const defenderDump = combat.defenderDumpIds[0] ?? null
+  const attackerCanPay = attackerDump !== null || combat.attackerStocksApplicable
+  const out: AiAction[] = []
+  if (attackerCanPay) {
+    out.push(
+      {
+        kind: 'combatSupply',
+        side: 'advance',
+        attackerDumpId: attackerDump,
+        defenderDumpId: defenderDump,
+        attackerUsesInternalStocks: combat.attackerStocksApplicable,
+        defenderUsesInternalStocks: combat.defenderStocksApplicable,
+      },
+      {
+        kind: 'combatSupply',
+        side: 'attacker',
+        attackerDumpId: attackerDump,
+        defenderDumpId: null,
+        attackerUsesInternalStocks: combat.attackerStocksApplicable,
+      },
+      {
+        kind: 'combatSupply',
+        side: 'defender',
+        attackerDumpId: null,
+        defenderDumpId: defenderDump,
+        defenderUsesInternalStocks: combat.defenderStocksApplicable,
+      },
+    )
+  }
+  out.push({ kind: 'combatSkip' })
+  return out
+}
 
 function pushUnique(
   out: TrainingCandidate[],
@@ -204,33 +246,9 @@ export function candidateActionsOf(
   const combatState = snapshot.combat.state
   if (combatState !== null && !combatState.finished) {
     switch (combatState.step) {
-      case 'combatSupply': {
-        const attackerDump = snapshot.combat.attackerDumpIds[0] ?? null
-        const defenderDump = snapshot.combat.defenderDumpIds[0] ?? null
-        add({
-          kind: 'combatSupply',
-          side: 'advance',
-          attackerDumpId: attackerDump,
-          defenderDumpId: defenderDump,
-          attackerUsesInternalStocks: snapshot.combat.attackerStocksApplicable,
-          defenderUsesInternalStocks: snapshot.combat.defenderStocksApplicable,
-        })
-        add({
-          kind: 'combatSupply',
-          side: 'attacker',
-          attackerDumpId: attackerDump,
-          defenderDumpId: null,
-          attackerUsesInternalStocks: snapshot.combat.attackerStocksApplicable,
-        })
-        add({
-          kind: 'combatSupply',
-          side: 'defender',
-          attackerDumpId: null,
-          defenderDumpId: defenderDump,
-          defenderUsesInternalStocks: snapshot.combat.defenderStocksApplicable,
-        })
+      case 'combatSupply':
+        for (const action of combatSupplyCandidates(snapshot.combat)) add(action)
         break
-      }
       case 'declareAr':
         add({ kind: 'combatDeclareAr', side: 'attacker' })
         add({ kind: 'combatDeclareAr', side: 'defender' })
