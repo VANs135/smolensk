@@ -4184,11 +4184,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /* ── C8 补给交互与 SP 管理：派生（一切结论来自引擎；此处只做视图整形） ── */
-
-  /** C8：当前方的 SP 账本条目（12.1b） */
-  const spDumpsOfSide = computed<SpDump[]>(() =>
-    spDumps.value.filter((dump) => dump.side === activeSide.value),
-  )
+  /** C8 当前方 / 12.11a 行动方的 SP 账本（后者是销毁提交口径） */
+  const dumpsOf = (side: Side): SpDump[] => spDumps.value.filter((dump) => dump.side === side)
+  const spDumpsOfSide = computed<SpDump[]>(() => dumpsOf(activeSide.value))
+  const actingSpDumps = computed<SpDump[]>(() => dumpsOf(actingSide.value))
 
   /**
    * 12.1b + 13.2f：**装载在运输点数上的 SP 也是补给站**（"SP 使用前并不需要被卸载"）
@@ -22515,6 +22514,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     allSpDumps,
     spDumps,
     spDumpsOfSide,
+    actingSpDumps,
     offMapSupplyStocks,
     supplySourceDecls,
     supplyUnitId,

@@ -393,4 +393,31 @@ describe('候选覆盖：闸门表里每个族都有候选投影（不再标 uns
     const entry = entryOf(legal.view, 'air.baseReduce')
     expect(entry.candidates.map((candidate) => candidate.ref)).toEqual(['base-1'])
   })
+
+  it('12.11a：反应段销毁候选按 actingSide 取站，提交入口接受同一侧', () => {
+    const w = newConsole()
+    // 反应段：阶段玩家是苏军，真正行动的是轴军（7.0a）
+    w.setActiveSide('soviet')
+    w.setPhase('reaction')
+    const index = w.playerSegmentSteps.findIndex((step) => step.id === 'reaction.movement')
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(w.setSegmentStepIndex(index)).toBe(true)
+
+    w.spDumps.push({ id: 'dump-axis', hex: { ...CORE_HEX }, side: 'axis', sp: 2, t: 0 })
+    w.spDumps.push({
+      id: 'dump-soviet',
+      hex: { col: CORE_HEX.col + 1, row: CORE_HEX.row },
+      side: 'soviet',
+      sp: 2,
+      t: 0,
+    })
+
+    const legal = useLegalActionsStore()
+    const entry = entryOf(legal.view, 'move.dumpBlow')
+    expect(entry.status).toBe('available')
+    expect(entry.candidates.map((candidate) => candidate.ref)).toEqual(['dump-axis'])
+    // 只读视图与提交入口必须同口径：先试阶段玩家的站 ⇒ 拒；再试行动方的站 ⇒ 过
+    expect(w.destructDumpNow('dump-soviet', 1, 6)).toBe(false)
+    expect(w.destructDumpNow('dump-axis', 1, 6)).toBe(true)
+  })
 })

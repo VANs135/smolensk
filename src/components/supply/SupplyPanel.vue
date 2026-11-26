@@ -219,9 +219,9 @@ function dumpItem(dump: {
   }
 }
 
-/** 12.11a：可销毁的补给站（**每阶段每站一次** ⇒ 已试过的根本不出现） */
+/** 12.11a：可销毁的补给站（按提交入口的 actingSide；**每阶段每站一次** ⇒ 已试过的根本不出现） */
 const destroyDumpItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.spDumpsOfSide
+  workbench.actingSpDumps
     .filter((dump) => (workbench.dumpDestructionAttempts[dump.id] ?? 0) === 0)
     .map((dump) => ({
       ...dumpItem(dump),
@@ -538,7 +538,7 @@ watch(
   ([only, id, hex]) => {
     if (hex === null || hex === undefined || id === null || id === undefined) return
     if (only === 'dumpBlow') {
-      const dump = workbench.spDumpsOfSide.find(
+      const dump = workbench.actingSpDumps.find(
         (item) => item.hex.col === hex.col && item.hex.row === hex.row,
       )
       // 12.11a：本阶段已尝试过的站不再出现 ⇒ 也不预选（点了只会被拒）

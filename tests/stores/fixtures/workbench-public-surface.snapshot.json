@@ -3,6 +3,7 @@
   "abortMoveNow",
   "absorbBreakdownNow",
   "acknowledgeReinforcementStepNow",
+  "actingSpDumps",
   "actionAllowedNow",
   "actionRefusal",
   "activeMoveUnits",

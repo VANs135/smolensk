@@ -99,7 +99,8 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       ref: unit.instanceId,
       label: unit.name,
     }))
-    table['move.dumpBlow'] = workbench.spDumpsOfSide.map((dump) => ({
+    // 12.11a：销毁按提交入口的 `actingSide` 取站；反应段不能列阶段玩家的站
+    table['move.dumpBlow'] = workbench.actingSpDumps.map((dump) => ({
       ref: dump.id,
       label: `${String(dump.hex.col)}.${String(dump.hex.row)} · ${String(dump.sp)}SP/${String(dump.t)}T`,
     }))
