@@ -10,6 +10,7 @@
     "build:train": "node scripts/build-training-bundle.mjs",
     "preview": "vite preview",
     "serve:dist": "node scripts/serve-dist.mjs",
+    "online:relay": "node server/online-room-relay.mjs",
     "pack": "npm run build && node scripts/pack-release.mjs",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && node scripts/android-apk.mjs",

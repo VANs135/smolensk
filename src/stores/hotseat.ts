@@ -138,6 +138,16 @@ export const useHotseatStore = defineStore('hotseat', () => {
    * 本 ref 只由 `setViewerSide` 改写；全文件没有任何 watch 会因为 `decisionSide` 变化而改它。
    */
   const viewerSide = ref<Side>(workbench.activeSide)
+
+  /**
+   * 联机固定观察方（`null` ＝ 本机热座，可自由切换）
+   *
+   * 2026-11-27（用户口径）：双人联机只隔离 UI/视角，不做服务端反作弊。每个客户端创建/加入
+   * 房间时把自己的阵营写死；之后所有 `setViewerSide` 调用都不得改变它。锁定本身只影响
+   * 视角与哪些控件显示，不改变行动方、不改变规则。
+   */
+  const viewerLockedTo = ref<Side | null>(null)
+
   watch(
     viewerSide,
     () => {
@@ -147,9 +157,26 @@ export const useHotseatStore = defineStore('hotseat', () => {
     { flush: 'sync' },
   )
 
-  /** 手动切观察方（只改视角；不翻行动方、不遮屏、不触发交接） */
-  function setViewerSide(next: Side): void {
+  /**
+   * 手动切观察方（只改视角；不翻行动方、不遮屏、不触发交接）
+   *
+   * 联机锁定后返回 `false` 且不落值；调用方不必自己判锁，避免某个入口漏判。
+   */
+  function setViewerSide(next: Side): boolean {
+    if (viewerLockedTo.value !== null && next !== viewerLockedTo.value) return false
     viewerSide.value = next
+    return true
+  }
+
+  /** 联机落座：固定观察方；离开房间时由 `unlockViewer` 解除。 */
+  function lockViewer(next: Side): void {
+    viewerLockedTo.value = next
+    viewerSide.value = next
+  }
+
+  /** 离开联机/读本地档时解除固定，恢复本机热座可切换的状态。 */
+  function unlockViewer(): void {
+    viewerLockedTo.value = null
   }
 
   /**
@@ -186,6 +213,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
    * （2026-11-11 口径：轮到对方行动不自动切视角）。
    */
   function syncViewerToDefault(): void {
+    if (viewerLockedTo.value !== null) return
     const next = defaultViewerSide()
     if (next !== null) viewerSide.value = next
   }
@@ -444,6 +472,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /** 换剧本 ＝ 重开一局 ⇒ 解锁，让玩家在选剧本页重新定模式 */
   function resetModeLock(): void {
     setupLocked.value = false
+    viewerLockedTo.value = null
     // 用户 2026-11-18：换局不留上一局的旧视角（随后 `lockMode` 进初设时还会再同步一次）
     syncViewerToDefault()
   }
@@ -466,6 +495,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
    *     选择前 AI 不接管（`aiControlMode` 由 mode 推出）、热坐遮罩也不按 PVP 口径亮起。
    */
   function restoreFromSave(saved: SaveHotseat | undefined): void {
+    viewerLockedTo.value = null
     /*
      * 2026-11-14：读档时观察方**归位到档内行动方**。
      * 建店时 `viewerSide` 取的是当时（主页）的 `activeSide`＝axis；读一份苏军回合的档后
@@ -528,6 +558,24 @@ export const useHotseatStore = defineStore('hotseat', () => {
     mode.value = 'pve'
     aiSide.value = 'soviet'
     syncViewerToDefault()
+  }
+
+  /**
+   * 联机外壳：把当前对局切成“双方各自执一方”的组织方式
+   *
+   * 用户 2026-11-27 口径：不做服务端反作弊，只保证双方 UI/视角/操作权限隔离。
+   *   · `mode` 固定为 `pvp`（不是 PVE，避免 AI 接管）；
+   *   · `setupLocked` 固定为 true（联机从已开始的局面进入，不允许再改模式）；
+   *   · `viewerSide` 固定为本人阵营，之后任何切视角入口都只读。
+   *
+   * 它只改对局组织方式，不碰 `activeSide` / 盘面 / 记录轨；规则判定仍全在引擎。
+   */
+  function adoptOnlineShell(side: Side): void {
+    mode.value = 'pvp'
+    aiSide.value = null
+    setupLocked.value = true
+    scriptedSide.value = null
+    lockViewer(side)
   }
 
   /*
@@ -595,6 +643,11 @@ export const useHotseatStore = defineStore('hotseat', () => {
     decisionSide,
     viewerSide,
     setViewerSide,
+    // 联机：固定观察方（只影响 UI/视角，不是规则）
+    viewerLockedTo,
+    lockViewer,
+    unlockViewer,
+    adoptOnlineShell,
     playerSide,
     defaultViewerSide,
     syncViewerToDefault,

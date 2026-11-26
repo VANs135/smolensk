@@ -73,7 +73,7 @@ describe('批 2：窗内只留当前决定与控件', () => {
     expect(flow).toContain('bar__block')
     expect(flow).toContain('v-if="showAdvance"')
     expect(flow).toMatch(
-      /const showAdvance = computed\(\s*\(\) => flow\.value\.canAdvance && liveBlock\.value === null/,
+      /const showAdvance = computed\(\s*\(\) =>\s*flow\.value\.canAdvance\s*&&\s*liveBlock\.value === null/,
     )
     expect(flow).not.toContain('class="bar__rule num"')
   })

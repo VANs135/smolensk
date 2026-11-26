@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
-import { useGameSessionStore, useWorkbenchStore } from '@/stores'
+import { useGameSessionStore, useOnlineStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 待答面板（W6 C10：由**会话驱动**的强制选择呈现）
@@ -21,9 +21,15 @@ import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 const gameSession = useGameSessionStore()
 const workbench = useWorkbenchStore()
+const online = useOnlineStore()
 
 /** 当前待答问题（null = 未待答，面板整体不渲染） */
 const question = computed(() => gameSession.question)
+
+/** 联机时只有应答方本机能作答；另一方看题面但收起全部选项。 */
+const canAnswer = computed<boolean>(
+  () => question.value !== null && (!online.active || online.mySide === question.value.responder),
+)
 
 /** 选项列表（无选项 ⇒ 空数组，按确认题处理） */
 const options = computed(() => question.value?.options ?? [])
@@ -52,20 +58,21 @@ function answer(optionId?: string): void {
         <div class="prompt__body">
           <p class="prompt__prompt">{{ question.prompt }}</p>
 
-          <div v-if="options.length > 0" class="prompt__options">
-            <BaseButton
-              v-for="option in options"
-              :key="option.id"
-              variant="primary"
-              size="sm"
-              @click="answer(option.id)"
-            >
-              {{ option.label }}
-            </BaseButton>
+          <div v-if="canAnswer" class="prompt__options">
+            <template v-if="options.length > 0">
+              <BaseButton
+                v-for="option in options"
+                :key="option.id"
+                variant="primary"
+                size="sm"
+                @click="answer(option.id)"
+              >
+                {{ option.label }}
+              </BaseButton>
+            </template>
+            <BaseButton v-else variant="primary" size="sm" @click="answer()">确认作答</BaseButton>
           </div>
-          <div v-else class="prompt__options">
-            <BaseButton variant="primary" size="sm" @click="answer()">确认作答</BaseButton>
-          </div>
+          <p v-else class="prompt__wait" role="status">等待对方应答…</p>
 
           <p v-if="gameSession.error !== null" class="prompt__error">
             <BaseTag kind="danger">{{ gameSession.error.rule }}</BaseTag>
@@ -133,6 +140,12 @@ function answer(optionId?: string): void {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.prompt__wait {
+  margin: 0;
+  color: var(--color-command-muted);
+  font-size: var(--text-sm);
 }
 
 .prompt__error {

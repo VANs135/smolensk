@@ -11,6 +11,7 @@ import {
   useGameSessionStore,
   useHotseatStore,
   useMapViewStore,
+  useOnlineStore,
   useSetupStore,
   useUiStore,
   useWorkbenchStore,
@@ -82,6 +83,7 @@ const app = useAppStore()
 const ui = useUiStore()
 /** 动作提示带的来源（`mapView.actionHint`；用户口径：地图上方不放消息栏 ⇒ 搬到这里） */
 const mapView = useMapViewStore()
+const online = useOnlineStore()
 
 /** 当前步序号（null = 无法确定） */
 const currentIndex = computed<number | null>(() => gameSession.guidance?.index ?? null)
@@ -259,8 +261,15 @@ const aiTurnHidden = computed(
     decidingSide.value === hotseat.aiSide,
 )
 const showAdvance = computed(
-  () => flow.value.canAdvance && liveBlock.value === null && !aiTurnHidden.value,
+  () =>
+    flow.value.canAdvance &&
+    liveBlock.value === null &&
+    !aiTurnHidden.value &&
+    !(online.active && !online.canWrite),
 )
+
+/** 联机且轮到对方：按钮位置改显等待态，不让本方代对手结束环节。 */
+const onlineWait = computed<boolean>(() => online.active && !online.canWrite)
 const notice = computed(() => {
   const blocker = liveBlock.value ?? workbench.advanceBlock
   if (blocker === null) return null
@@ -336,6 +345,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <BaseButton v-if="showAdvance" class="bar__advance" variant="primary" @click="onAdvance"
         >{{ advanceLabel }} <span aria-hidden="true">→</span></BaseButton
       >
+      <span v-else-if="onlineWait" class="bar__block" role="status">等待对方操作</span>
       <span v-else class="bar__block" role="status" :title="liveBlock?.rule">
         {{ liveBlock?.reason ?? advanceLabel }}
       </span>

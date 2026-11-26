@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string
   /** API 基地址；本期无后端留空，二期 FastAPI 部署时填写 */
   readonly VITE_API_BASE_URL: string
+  /** 联机房间中继地址；留空则退回同浏览器双标签的本机通道 */
+  readonly VITE_ONLINE_ROOM_URL?: string
 }
 
 interface ImportMeta {

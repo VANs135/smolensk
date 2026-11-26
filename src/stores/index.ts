@@ -28,3 +28,5 @@ export * from './session-steps'
 export * from './recorder'
 // 用户 2026-11-18 第 2 条：Vitebsk 教学模式（逐步指到 UI 的引导状态机；不改规则）
 export * from './tutorial'
+// 用户 2026-11-27：双人联机（房间状态复制与观察方固定；不做服务端反作弊）
+export * from './online'

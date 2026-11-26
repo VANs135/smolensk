@@ -51,3 +51,6 @@ backup/
 
 # 临时脚本与日志
 .tmp/
+
+# 联机中继的本地房间表（含真实对局内容，不入库）
+server/online-rooms.json

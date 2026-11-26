@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { BaseButton, BaseDialog, BaseIcon } from '@/components/base'
+import OnlineRoomPanel from '@/components/online/OnlineRoomPanel.vue'
 import { useGameSessionStore, useSetupStore, useUiStore } from '@/stores'
 
 const game = useGameSessionStore()
 const setup = useSetupStore()
 const ui = useUiStore()
 const confirmNew = ref(false)
+const joinOpen = ref(false)
+
 const hasCurrent = computed(() => game.session !== null || (setup.applied && !setup.finished))
+
+function onJoinOpen(): void {
+  joinOpen.value = true
+}
+
+function onJoined(): void {
+  joinOpen.value = false
+  ui.navigate('game')
+}
+
+onMounted(() => {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ''))
+  if (params.get('online') !== null && params.get('key') !== null) joinOpen.value = true
+})
 
 function onNewGame(): void {
   if (hasCurrent.value) {
@@ -53,9 +70,17 @@ function onRestart(): void {
           >
             新建对局 <BaseIcon name="chevron-right" />
           </button>
+          <button class="home__action" type="button" @click="onJoinOpen">
+            加入联机对局 <BaseIcon name="chevron-right" />
+          </button>
         </div>
       </div>
     </section>
+
+    <BaseDialog v-model:open="joinOpen" title="加入联机对局">
+      <p>加入会替换当前本机对局/初设。需要保留进度时请先保存。</p>
+      <OnlineRoomPanel variant="home" @joined="onJoined" />
+    </BaseDialog>
 
     <BaseDialog v-model:open="confirmNew" title="新建对局">
       <p v-if="game.session !== null">新建会替换当前对局。需要保留进度时请先保存。</p>

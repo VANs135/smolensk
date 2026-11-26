@@ -112,7 +112,7 @@ describe('B38：初设框可拖 + 落满给「完成初设」（源码守卫）'
     // 初设收束后本框由视图的条件移除（"结束后自动关"；抽签已改为确认时自动执行）
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     expect(game).toMatch(
-      /<DecisionQueue\s+v-if="setup\.applied && \(!setup\.finished \|\| setup\.setupStartEntryVisible\)"/,
+      /<DecisionQueue\s+v-if="\s*setup\.applied && \(!setup\.finished \|\| setup\.setupStartEntryVisible\)(?: && !onlineWaiting)?\s*"/,
     )
   })
 

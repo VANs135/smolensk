@@ -374,7 +374,7 @@ onMounted(() => {
       <TerminationNotice />
 
       <BasePanel title="局况与切方（2.2 / 2.3 / 4.9a）">
-        <div class="row">
+        <div v-if="hotseat.viewerLockedTo === null" class="row">
           <!-- 用户 2026-11-11：换手不自动切视角；看哪一方由玩家自己点 -->
           <BaseButton
             :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
@@ -394,6 +394,7 @@ onMounted(() => {
             直接切方（改行动方）
           </BaseButton>
         </div>
+        <p v-else class="muted">联机视角已锁定；切方入口已收起。</p>
         <div class="row">
           <span class="muted num">
             当前观察方：{{

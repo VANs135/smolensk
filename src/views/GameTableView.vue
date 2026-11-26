@@ -22,6 +22,7 @@ import {
 import type { AuxCardView } from '@/stores/containers'
 import { MapCanvas, MapDock } from '@/components/map'
 import { MovePanel } from '@/components/move'
+import OnlineRoomPanel from '@/components/online/OnlineRoomPanel.vue'
 import { FuelPanel } from '@/components/fuel'
 import { BreakoutPanel } from '@/components/breakout'
 import { ReinforcementPanel } from '@/components/reinforcement'
@@ -36,6 +37,7 @@ import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { TutorialGuide } from '@/components/tutorial'
 import { provideUiMode } from '@/components/ui-mode'
 import { useBoxRail } from '@/components/game/box-rail'
+import { useOnlineTableIsolation } from '@/components/game/online-isolation'
 import { VictoryDialog, VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
 import type { EdgeBoxId } from '@/engine/rules'
@@ -48,6 +50,7 @@ import {
   useHotkeyStore,
   useHotseatStore,
   useMapViewStore,
+  useOnlineStore,
   useRecorderStore,
   useSetupStore,
   useThemeStore,
@@ -115,6 +118,7 @@ const hotkeys = useHotkeyStore()
 const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
+const online = useOnlineStore()
 const theme = useThemeStore()
 
 const ui = useUiStore()
@@ -143,6 +147,7 @@ const aiPlay = createAiPlayLoop({
 
 const modeLabel = computed<string>(() => {
   if (hotseat.mode === null) return '未设置'
+  if (online.active) return `ONLINE · ${online.mySideLabel}`
   if (hotseat.mode === 'pvp') return 'PVP · 双人热坐'
   if (hotseat.mode === 'solo') return 'SOLO · 单人'
   const aiSide = hotseat.aiSide === 'axis' ? '轴心国' : '苏联'
@@ -184,7 +189,9 @@ const drawers = [
 const railDrawers = drawers.filter((item) => item.id !== 'settings')
 
 /** 左栏盒组（2026-11-26）：分组逻辑与图标在 `components/game/box-rail.ts`（隔离口径单独守），这里只拿成品 */
-const { groups: boxRailGroups, anchorCards: boxAnchorCards, iconPath: boxIconPath } = useBoxRail()
+const boxRail = useBoxRail()
+const { onlineWaiting, boxRailGroups } = useOnlineTableIsolation(boxRail.groups)
+const { anchorCards: boxAnchorCards, iconPath: boxIconPath } = boxRail
 
 const layers = [
   { key: 'image', label: '扫描图' },
@@ -698,7 +705,9 @@ onBeforeUnmount(() => {
         >
           <template #overlay>
             <DecisionQueue
-              v-if="setup.applied && (!setup.finished || setup.setupStartEntryVisible)"
+              v-if="
+                setup.applied && (!setup.finished || setup.setupStartEntryVisible) && !onlineWaiting
+              "
               id="setup-queue"
               tabindex="-1"
             />
@@ -770,12 +779,14 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <!-- 4.8a：环节/阶段末超堆叠（有义务才挂载；没有「忽略」旁路） -->
-            <OverstackPanel v-if="setup.finished" />
+            <OverstackPanel v-if="setup.finished && !onlineWaiting" />
             <SupplyPhasePanel
-              v-if="setup.finished && workbench.phase === 'supply' && session === null"
+              v-if="
+                setup.finished && workbench.phase === 'supply' && session === null && !onlineWaiting
+              "
             />
             <MapDock
-              v-if="session !== null"
+              v-if="session !== null && !onlineWaiting"
               :key="session.sessionId"
               :session-key="session.kind"
               :title="sessionTitle"
@@ -911,6 +922,11 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
+          <section class="gt__settings" aria-label="联机">
+            <h2>联机</h2>
+            <OnlineRoomPanel variant="game" />
+          </section>
+
           <section class="gt__settings" aria-label="对局控制">
             <h2>对局控制</h2>
             <!-- 2026-11-09：模式在选剧本页定下、初设后锁定 ⇒ 这里只读展示，不再给 AI 开关 -->
@@ -921,7 +937,7 @@ onBeforeUnmount(() => {
               用户 2026-11-11：换手不自动切视角，看哪一方由玩家自己点。
               2026-11-20：PVE 下不能再看苏方（AI）⇒ 视角开关只留给人人对战。
             -->
-            <template v-if="hotseat.mode !== 'pve'">
+            <template v-if="hotseat.mode !== 'pve' && hotseat.viewerLockedTo === null">
               <BaseButton
                 :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
                 size="sm"
@@ -937,6 +953,10 @@ onBeforeUnmount(() => {
                 看苏联
               </BaseButton>
             </template>
+            <p v-else-if="hotseat.viewerLockedTo !== null" class="gt__mode">
+              联机视角已锁定为 <strong>{{ online.mySideLabel }}</strong
+              >；不能切换到对方视角。
+            </p>
             <BaseButton
               variant="ghost"
               size="sm"
