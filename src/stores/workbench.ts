@@ -448,6 +448,7 @@ import {
   type HexPickCandidates,
   type PendingHexPick,
 } from './workbench-model'
+import { railGaugeHintOf } from './rail-gauge-hint'
 import { actionFamilyRowsAt } from './action-families'
 import { createMoveUnitViewCache } from './move-unit-view-cache'
 /**
@@ -15665,15 +15666,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const participatingUnitCount = computed<number>(() => participatingUnitIds.value.length)
 
-  /**
-   * 地图内就地一行的**提示文本**（无提示时 null）
-   *
-   * 优先级：闸门拒绝（`actionRefusal`，说明"这一步此刻在哪一段哪一环节才能做"）
-   * → 移动被拒（`moveBlocked`，说明这一格为什么走不到）。
-   * 两者都是"点了没反应"时玩家最需要的一句话，且都自带规则号。
-   */
-  const mapHint = computed<MapHint | null>(() =>
-    mapHintOf({ refusal: actionRefusal.value, moveBlocked: moveBlocked.value }),
+  /** 13.3g-D：选中的铁路修理单位本阶段换轨额度（纯函数与引擎同口径） */
+  const railGaugeHint = computed<MapHint | null>(() =>
+    railGaugeHintOf(phase.value, selectedUnit.value, gaugeConversionsThisPhase.value),
+  )
+  /** 地图提示：闸门拒绝 > 移动被拒 > 换轨额度；共用左下角槽位与 tone */
+  const mapHint = computed<MapHint | null>(
+    () =>
+      mapHintOf({ refusal: actionRefusal.value, moveBlocked: moveBlocked.value }) ??
+      railGaugeHint.value,
   )
 
   /**

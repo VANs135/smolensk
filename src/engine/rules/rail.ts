@@ -510,6 +510,15 @@ export interface GaugeConversionResult {
 }
 
 /**
+ * 13.3g-D：一个铁路修理单位本移动阶段可转换的格数 = `min(4, 当前 MA)`
+ *
+ * 引擎判定与界面「换轨额度 n/limit」共用这一份口径，避免两处各写一遍上下限。
+ */
+export function railConversionLimit(currentMa: number): number {
+  return Math.min(RAIL_CONVERSION_MAX_PER_PHASE, currentMa)
+}
+
+/**
  * 13.3f / 13.3g：轨距转换
  *
  * 「A) 铁路**不能**在敌方 ZOC 内转换轨距（无法被抵消）。B) 一个铁路修理单位只需**移动进入**一个铁路格，
@@ -545,7 +554,7 @@ export function validateGaugeConversion(
   const canConvert = input.mode === 'combat' || (input.dg && input.orientation === 'combat')
   if (!canConvert) return fail('13.3g', `mustBeCombatMode:${unit.id}`)
 
-  const limit = Math.min(RAIL_CONVERSION_MAX_PER_PHASE, input.currentMa)
+  const limit = railConversionLimit(input.currentMa)
   if (input.convertedThisPhase >= limit)
     return fail('13.3g', `conversionLimitReached:${input.convertedThisPhase}>=${limit}`)
   // 13.3g-A：不得接力

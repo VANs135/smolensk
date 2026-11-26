@@ -189,6 +189,31 @@ describe('13.3g-D：换轨计数的阶段账本', () => {
     store.setPhase('combat')
     expect(store.gaugeConversionsThisPhase).toEqual([])
   })
+
+  it('选中的铁路修理单位在移动阶段 ⇒ 左下角提示换轨额度 n/min(4,MA)', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    const record = groundRecord('axis', (item) => (item.specialized ?? []).includes('rail_repair'))
+    const unit = placeGround(store, record, { col: 2, row: 2 }, 'axis', 'rr-quota')
+    store.selectedId = unit.instanceId
+
+    expect(store.mapHint).toEqual({ text: '换轨额度 0/4 格', rule: '13.3g', tone: 'info' })
+    store.gaugeConversionsThisPhase = [{ instanceId: unit.instanceId, count: 2 }]
+    expect(store.mapHint?.text).toBe('换轨额度 2/4 格')
+    store.gaugeConversionsThisPhase = [{ instanceId: unit.instanceId, count: 4 }]
+    expect(store.mapHint).toEqual({
+      text: '换轨额度 4/4 格',
+      rule: '13.3g',
+      tone: 'warning',
+    })
+
+    // 换成普通战斗单位 / 离开移动阶段 ⇒ 额度提示让位，不占左下角
+    store.selectedId = null
+    expect(store.mapHint).toBeNull()
+    store.selectedId = unit.instanceId
+    store.setPhase('combat')
+    expect(store.mapHint).toBeNull()
+  })
 })
 
 /** 摆一个「有铁路 + 村庄/城市」的格（供上面的补给线用例引用，避免删了没人发现） */

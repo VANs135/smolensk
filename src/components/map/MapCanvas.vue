@@ -1479,6 +1479,10 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   pointer-events: none;
 }
 
+.mapcanvas__hint--info {
+  border-color: var(--color-info);
+}
+
 .mapcanvas__hint--warning {
   border-color: var(--color-accent);
 }

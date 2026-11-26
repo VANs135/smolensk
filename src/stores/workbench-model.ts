@@ -865,8 +865,8 @@ export interface MapHint {
   text: string
   /** 规则编号（有则原样显示，方便玩家翻条文） */
   rule: string | null
-  /** 语气：拒绝=warning、移动受阻=danger（与操作反馈区的 tone 同词表） */
-  tone: 'warning' | 'danger'
+  /** 语气：拒绝=warning、移动受阻=danger、额度等信息=info（与操作反馈区的 tone 同词表） */
+  tone: 'info' | 'warning' | 'danger'
 }
 
 /**

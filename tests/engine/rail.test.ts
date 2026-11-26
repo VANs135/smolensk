@@ -18,6 +18,7 @@ import {
   deriveSegmentRailheads,
   mergeTransportPoints,
   railCapacityCost,
+  railConversionLimit,
   railPathFacts,
   splitTransportPoint,
   transportEquivalentOf,
@@ -497,6 +498,19 @@ describe('13.3f / 13.3g 轨距转换', () => {
       ok: false,
       reason: 'conversionOnlyInMovementPhase',
     })
+  })
+
+  it('13.3g-D：每阶段额度 = min(4, 当前 MA)，界面与判定共用一份', () => {
+    expect(railConversionLimit(4)).toBe(4)
+    expect(railConversionLimit(3)).toBe(3)
+    expect(railConversionLimit(5)).toBe(4)
+    expect(railConversionLimit(0)).toBe(0)
+    expect(validateGaugeConversion({ ...base, currentMa: 3, convertedThisPhase: 3 })).toMatchObject(
+      {
+        ok: false,
+        reason: 'conversionLimitReached:3>=3',
+      },
+    )
   })
 
   it('13.3f：目标格必须有铁路', () => {
