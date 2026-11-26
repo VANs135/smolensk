@@ -353,6 +353,8 @@ export interface StepMovingUnit {
   crossedOnBridge: boolean
   /** 是否借 6.1c 最小移动 */
   minimumMove: boolean
+  /** 6.2b：本步地形为 All，已耗尽全部剩余 MA */
+  spendsAllMp: boolean
   /** 本步之后必须结束移动（通规 4.5a-A / 6.2b All / 6.1c / 5.8b） */
   mustEndMove: boolean
 }
@@ -432,6 +434,7 @@ export function previewStep(input: {
       roadOverride: outcome.roadOverride,
       crossedOnBridge: outcome.crossedOnBridge,
       minimumMove: outcome.minimumMove,
+      spendsAllMp: outcome.spendsAllMp,
       mustEndMove: outcome.mustEndMove,
     })
     rules.add(outcome.forcedStop ? '4.5a-A' : '6.1a')
@@ -986,6 +989,7 @@ export function applyOverrunMove(input: {
         roadOverride: false,
         crossedOnBridge: false,
         minimumMove: false,
+        spendsAllMp: false,
         mustEndMove: unit.ended,
       })),
       droppingIds: [],

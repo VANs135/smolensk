@@ -202,7 +202,10 @@ const previewText = computed(() => {
       step.moving
         .map(
           (item) =>
-            `${nameOfUnit(item.unitId)} 本步 ${item.cost} MP（格 ${item.hexCost} + 格边 ${item.hexsideCost}）` +
+            `${nameOfUnit(item.unitId)} 本步 ${item.cost} MP` +
+            (item.spendsAllMp
+              ? '（6.2b All：耗尽全部剩余 MA）'
+              : `（格 ${item.hexCost} + 格边 ${item.hexsideCost}）`) +
             `${item.roadOverride ? ' 沿路' : ''}${item.crossedOnBridge ? ' 过桥' : ''}` +
             `${item.minimumMove ? ' 最小移动（6.1c）' : ''}`,
         )

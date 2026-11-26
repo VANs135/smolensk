@@ -9,6 +9,9 @@ import { reachableSnapshots } from './move-reachable-fixture'
  * 基线由**优化前代码**生成并固化在 `fixtures/move-reachable-baseline.txt`，
  * 覆盖开阔地/道路/过河/EZOC（抵消与未抵消）/敌方占格/战略断补/预备+工事/最小移动/边界。
  * 任何优化都必须是等价变换：本文件逐字符比对，不允许更新基线来「修绿」。
+ * 例外：2026-11-26 按 6.2b 把无桥大河的 `All` 从目标格费率改为**实际耗尽剩余 MA**，
+ * 这是规则语义修正而非优化；基线随之按修复后输出重生成，并新增
+ * `move.test.ts` / `move-interaction.test.ts` 的定向回归。
  */
 const BASELINE = readFileSync(
   new URL('./fixtures/move-reachable-baseline.txt', import.meta.url),

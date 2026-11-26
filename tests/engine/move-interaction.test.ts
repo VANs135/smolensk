@@ -355,6 +355,53 @@ describe('6.1a / 6.1e / 6.1f 提交单步', () => {
     expect(cached.data.patches).toEqual(auto.data.patches)
   })
 
+  it('6.2b：无桥大河对步行 = 全部剩余 MA 记账（不是目标格 1 MP）', () => {
+    const to = { col: 11, row: 10 }
+    const views = [unit({ ma: 6 })]
+    const ctx = context(views, {
+      map: {
+        onMap: () => true,
+        terrainsAt: () => ['Open'],
+        crossingBetween: () => ({ river: 'Major River' }),
+      },
+    })
+    const runtime = runtimeOf(views)
+    const state = startMove(ctx, ['u1'], runtime)
+    const preview = previewStep({ context: ctx, interaction: state, runtime, to })
+    expect(preview.ok).toBe(true)
+    expect(preview.moving[0]!.cost).toBe(6)
+    expect(preview.moving[0]!.spendsAllMp).toBe(true)
+
+    const step = planStep({ context: ctx, interaction: state, runtime, to, preview })
+    expect(step.ok).toBe(true)
+    if (!step.ok) return
+    expect(step.data.record.costById).toEqual({ u1: 6 })
+    expect(step.data.patches[0]!.spentMp).toBe(6)
+    expect(step.data.patches[0]!.ended).toBe(true)
+
+    // 已耗 2 MP 再过大河：本步只补 4 MP，最终仍是满 MA 6，而不是 3。
+    const partialRuntime = runtimeOf(views)
+    partialRuntime[0]!.spentMp = 2
+    const partialState = startMove(ctx, ['u1'], partialRuntime)
+    const partialPreview = previewStep({
+      context: ctx,
+      interaction: partialState,
+      runtime: partialRuntime,
+      to,
+    })
+    expect(partialPreview.moving[0]!.cost).toBe(4)
+    const partialStep = planStep({
+      context: ctx,
+      interaction: partialState,
+      runtime: partialRuntime,
+      to,
+      preview: partialPreview,
+    })
+    expect(partialStep.ok).toBe(true)
+    if (!partialStep.ok) return
+    expect(partialStep.data.patches[0]!.spentMp).toBe(6)
+  })
+
   it('6.1e：堆叠内各单位分别记账（同一格、不同移动类型 ⇒ 消耗不同）', () => {
     // Forest 的 TEC 费率：步行 2 / 履带 3 / 轮式 4（charts-tec.json）
     const target = { col: 11, row: 10 }

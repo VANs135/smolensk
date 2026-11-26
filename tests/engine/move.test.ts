@@ -196,11 +196,19 @@ describe('逐步移动（6.1 / 6.2）', () => {
 
   it('地形写 All：可进入但耗尽全部残余 MA 并结束本轮移动（大河对步行）', () => {
     const ctx = context([unit({ mobility: 'leg', ma: 6 })], {
-      map: makeMap({ crossings: { '36.13|36.14': { river: 'Major River' } } }),
+      map: makeMap({
+        onMap: (hex) => key(hex) === '36.13' || key(hex) === '36.14',
+        crossings: { '36.13|36.14': { river: 'Major River' } },
+      }),
     })
     const step = expectOk(evaluateStep(ctx, 'u1', { col: 36, row: 14 }))
     expect(step.spendsAllMp).toBe(true)
     expect(step.mustEndMove).toBe(true)
+    expect(step.cost).toBe(6)
+    expect(step.hexCost).toBe(1)
+    const reach = computeReachableHexes(ctx, 'u1')
+    if (!reach.ok) throw new Error(`预期可达查询成功，实得：${reach.reason}`)
+    expect(reach.reachable.find((node) => key(node.hex) === '36.14')!.mpSpent).toBe(6)
   })
 
   it('6.1d：互逆性——身处禁入地形时不能从非道路格边离开', () => {

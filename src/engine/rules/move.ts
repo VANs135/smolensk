@@ -736,10 +736,16 @@ export function evaluateStepFrom(
     if (!context.traceSupplyAt(to, unit.side)) mustEndMove = true
   }
 
+  // 6.1c：最小移动只把「剩余的 MP 用完」（地形实际要多少由 hexCost/hexsideCost 如实带出）。
+  // 6.2b：All 不是目标格的普通费率，而是**耗尽全部剩余 MA**；否则 mpSpent 会只记目标格 1 MP。
+  const chargedCost = minimumMove
+    ? Math.min(cost.cost, remaining)
+    : cost.spendsAllMp
+      ? Math.max(0, remaining)
+      : cost.cost
   return {
     ok: true,
-    // 6.1c：最小移动只把「剩余的 MP 用完」（地形实际要多少由 hexCost/hexsideCost 如实带出）
-    cost: minimumMove ? Math.min(cost.cost, remaining) : cost.cost,
+    cost: chargedCost,
     hexCost: cost.hexCost,
     hexsideCost: cost.hexsideCost,
     trainbustingCost: cost.trainbustingCost,
