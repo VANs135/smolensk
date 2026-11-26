@@ -9,6 +9,7 @@ import {
   type MoveUnitRuntime,
   type MoveInteractionState,
   type MoveStepRecord,
+  type StepPreview,
 } from '@/engine/rules'
 import type { MoveStepSnapshot } from './movement-types'
 export interface GroundMovementPorts {
@@ -160,7 +161,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     rollbackReason.value = ''
     return true
   }
-  function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
+  function commitStep(to: HexRef, path: readonly HexRef[], preview?: StepPreview): boolean {
     const interaction = moveInteraction.value
     if (interaction === null || !ports.mayMutate()) return false
     const result = planStep({
@@ -169,6 +170,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
       runtime: moveRuntime.value,
       to,
       path,
+      ...(preview === undefined ? {} : { preview }),
     })
     if (!result.ok) {
       moveBlocked.value = { rule: result.rule, reason: result.reason }

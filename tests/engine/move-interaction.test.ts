@@ -338,6 +338,23 @@ describe('6.1a / 6.1e / 6.1f 提交单步', () => {
     expect(state.steps[0]!.costById).toEqual({ u1: 1 })
   })
 
+  it('planStep 复用调用方已算的预览：与自算第二次完全同账', () => {
+    const views = [unit()]
+    const ctx = context(views)
+    const runtime = runtimeOf(views)
+    const state = startMove(ctx, ['u1'], runtime)
+    const to = { col: 11, row: 10 }
+    const preview = previewStep({ context: ctx, interaction: state, runtime, to })
+
+    const auto = planStep({ context: ctx, interaction: state, runtime, to })
+    const cached = planStep({ context: ctx, interaction: state, runtime, to, preview })
+    expect(auto.ok).toBe(true)
+    expect(cached.ok).toBe(true)
+    if (!auto.ok || !cached.ok) return
+    expect(cached.data.record).toEqual(auto.data.record)
+    expect(cached.data.patches).toEqual(auto.data.patches)
+  })
+
   it('6.1e：堆叠内各单位分别记账（同一格、不同移动类型 ⇒ 消耗不同）', () => {
     // Forest 的 TEC 费率：步行 2 / 履带 3 / 轮式 4（charts-tec.json）
     const target = { col: 11, row: 10 }

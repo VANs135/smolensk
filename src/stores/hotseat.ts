@@ -288,12 +288,15 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /** 图上全部有算子的格（渲染与提示遍历用） */
   const occupiedHexes = computed<HexRef[]>(() => {
     const hexes: HexRef[] = []
-    for (const unit of workbench.units) {
-      if (!hexes.some((hex) => sameHex(hex, unit.hex))) hexes.push({ ...unit.hex })
+    const seen = new Set<string>()
+    const push = (hex: HexRef): void => {
+      const key = `${hex.col}.${hex.row}`
+      if (seen.has(key)) return
+      seen.add(key)
+      hexes.push({ ...hex })
     }
-    for (const air of workbench.onMapAirUnits) {
-      if (!hexes.some((hex) => sameHex(hex, air.hex))) hexes.push({ ...air.hex })
-    }
+    for (const unit of workbench.units) push(unit.hex)
+    for (const air of workbench.onMapAirUnits) push(air.hex)
     return hexes
   })
 

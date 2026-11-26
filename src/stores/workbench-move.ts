@@ -45,7 +45,11 @@ import type { BaseMode, Orientation } from '@/engine/rules/modes'
 import { canFlipOrientation, canReleaseReserve, flipOrientation } from '@/engine/rules/modes'
 import { applyModeSwitch, canSwitchModeNow } from '@/engine/rules/move-interaction'
 import type { MoveUnitRuntime } from '@/engine/rules/move-interaction'
-import type { MoveInteractionState, GroupReachable } from '@/engine/rules/move-interaction'
+import type {
+  MoveInteractionState,
+  GroupReachable,
+  StepPreview,
+} from '@/engine/rules/move-interaction'
 import type { MoveContext, StepFailure } from '@/engine/rules/move-types'
 import type { MoveStepRecord } from '@/engine/rules'
 import type * as Rules from '@/engine/rules'
@@ -762,8 +766,8 @@ export function createMovementDomain(ports: MovementDomainPorts) {
   }
 
   /** C5：提交一步（引擎给出 patches 与新的交互状态） */
-  function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
-    const ok = groundMovement.commitStep(to, path)
+  function commitStep(to: HexRef, path: readonly HexRef[], preview?: StepPreview): boolean {
+    const ok = groundMovement.commitStep(to, path, preview)
     if (ok) {
       // 13.3f-B：记「本阶段最后一次地面入格」，供移动交互被替换后仍能换轨
       const steps = moveInteraction.value?.steps ?? []
@@ -868,11 +872,11 @@ export function createMovementDomain(ports: MovementDomainPorts) {
           `进入 ${to.col}.${to.row} 的敌方 ZOC：轮式单位就地停止（4.5a-A；仍可对相邻敌方格发起突袭）`,
           '4.5a-A',
         )
-        if (!commitStep(to, path.slice(0, index + 1))) return
+        if (!commitStep(to, path.slice(0, index + 1), preview)) return
         if (ports.specialPending.value !== null) return
         continue
       }
-      if (!commitStep(to, path.slice(0, index + 1))) return
+      if (!commitStep(to, path.slice(0, index + 1), preview)) return
       // 9.14：该步触发了设施夺取的待决（位移落点待选）⇒ 停住推进，先让玩家处置
       if (ports.specialPending.value !== null) return
     }
@@ -983,6 +987,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
         runtime: simulatedRuntime,
         to,
         path: path.slice(0, index + 1),
+        preview,
       })
       if (!result.ok) {
         return { ok: false, rule: result.rule, reason: `该步不可进入（${result.rule}）` }

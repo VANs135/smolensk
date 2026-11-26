@@ -497,18 +497,27 @@ export function planStep(input: {
   runtime: readonly MoveUnitRuntime[]
   to: HexRef
   path?: readonly HexRef[]
+  /**
+   * 已由调用方按同一 `context/interaction/runtime/to/path` 算过的预览
+   *
+   * 拖拽路径预演会先 `previewStep` 再 `planStep`；不传时 `planStep` 自己算一次（保持旧调用方语义）。
+   * 传入可省掉同一输入的第二次全量判定。
+   */
+  preview?: StepPreview
 }): RuleOutcome<MoveStepPlan> {
   const { context, interaction, runtime, to } = input
   const activeIds = activeUnitIds(interaction, runtime)
   if (activeIds.length === 0) return fail('6.1', '本次移动已结束')
 
-  const preview = previewStep({
-    context,
-    interaction,
-    runtime,
-    to,
-    ...(input.path === undefined ? {} : { path: input.path }),
-  })
+  const preview =
+    input.preview ??
+    previewStep({
+      context,
+      interaction,
+      runtime,
+      to,
+      ...(input.path === undefined ? {} : { path: input.path }),
+    })
   if (!preview.ok) {
     const reason = preview.blocked
     if (reason === undefined) return fail('6.1', '没有任何单位能走这一步')
