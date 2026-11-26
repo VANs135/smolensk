@@ -86,6 +86,21 @@ function readOptions(args, outPath, workerIndex, workers) {
   }
 }
 
+async function relaxSsrTransport(server) {
+  const apply = (runner) => {
+    if (runner?.transport !== undefined) runner.transport.timeout = 600_000
+  }
+  apply(server.environments?.ssr?.runner)
+  /*
+   * `ssrLoadModule` 实际用的是 `_ssrCompatModuleRunner`，它自己 new 了一个
+   * `createServerModuleRunnerTransport`，和 environment.runner 不是同一个对象。
+   * 先用一个轻量模块把 runner 实例化，再放宽它的传输超时。
+   */
+  if (server._ssrCompatModuleRunner === undefined)
+    await server.ssrLoadModule('/src/ai/training/contract.ts')
+  apply(server._ssrCompatModuleRunner)
+}
+
 async function collectInto(options, metaType) {
   mkdirSync(dirname(options.outPath), { recursive: true })
   const stream = createWriteStream(options.outPath, { flags: 'w' })
@@ -106,8 +121,7 @@ async function collectInto(options, metaType) {
    * 的空档实测会超过 60s（磁盘冷缓存时约 100s），会被误判成 transport timeout。
    * 只放宽 CLI 的 SSR 传输等待；不改源码模块和构建行为。
    */
-  const ssrRunner = server.environments?.ssr?.runner
-  if (ssrRunner?.transport !== undefined) ssrRunner.transport.timeout = 600_000
+  await relaxSsrTransport(server)
 
   let total = 0
   try {

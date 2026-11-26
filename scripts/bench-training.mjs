@@ -342,6 +342,20 @@ async function runParent(args) {
   }
 }
 
+async function relaxSsrTransport(server) {
+  const apply = (runner) => {
+    if (runner?.transport !== undefined) runner.transport.timeout = 600_000
+  }
+  apply(server.environments?.ssr?.runner)
+  /*
+   * `ssrLoadModule` 用的是 `_ssrCompatModuleRunner`，它自己 new 了一个 transport，
+   * 和 environment.runner 不是同一个对象；先加载轻量模块实例化 runner，再放宽超时。
+   */
+  if (server._ssrCompatModuleRunner === undefined)
+    await server.ssrLoadModule('/src/ai/training/contract.ts')
+  apply(server._ssrCompatModuleRunner)
+}
+
 async function runWorker(args) {
   const workerIndex = nonNegativeInt(args, 'worker-index', 0)
   const workerTotal = positiveInt(args, 'worker-total', 1)
@@ -377,7 +391,9 @@ async function runWorker(args) {
     server = await createServer({
       appType: 'custom',
       logLevel: 'error',
-      cacheDir: resolve(`node_modules/.vite/bench-worker-${String(workerIndex)}`),
+      // bench 的 worker 启动是**串行**的（前一个 ready 后才起下一个），
+      // 共享同一 Vite cache 可让后续 worker 复用已编译模块；不要照搬到并发启动的采集器。
+      cacheDir: resolve('node_modules/.vite/bench-shared'),
       server: {
         middlewareMode: true,
         hmr: false,
@@ -389,8 +405,7 @@ async function runWorker(args) {
      * 首次编译 `src/data` 在冷缓存下可能超过 Vite 默认的 60s SSR transport 超时；
      * 这里放宽到 10 分钟，避免把慢启动误报成模块错误。
      */
-    const ssrRunner = server.environments?.ssr?.runner
-    if (ssrRunner?.transport !== undefined) ssrRunner.transport.timeout = 600_000
+    await relaxSsrTransport(server)
     const { createTrainingEnv } = await server.ssrLoadModule('/src/ai/training/env.ts')
     const { decideAiAction } = await server.ssrLoadModule('/src/ai/policy.ts')
     const { AI_TRAIN_VERSION } = await server.ssrLoadModule('/src/ai/training/contract.ts')
