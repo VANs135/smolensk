@@ -248,13 +248,19 @@ function dedupeSortedHexes(hexes: readonly AiHex[]): AiHex[] {
   return [...seen.values()].sort((a, b) => a.col - b.col || a.row - b.row)
 }
 
+/** 码点序：跨 locale 稳定，用于名字/文本兜底（不要用 localeCompare 做训练可复现排序） */
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
 /**
- * 稳定排序键：`格号|型号`
+ * 稳定排序键：`格号|单位库键`
  *
- * `instanceId` 由 `shared/id.ts` 的 `Date.now()` + **未补零的 base36 序号**拼成，
- * 跨进程必然不同、且序号过 36 后字典序不再等于创建顺序 —— 用它做先后判据会让
- * 「同种子 + 同盘面」两次运行选出不同的单位（实测：剧本 1 的 drawCount 223 vs 234）。
- * 故快照里所有「需要挑一个」的列表都在这里按**盘面位置 + 型号**排好，策略层不再排序。
+ * `instanceId` 由 `shared/id.ts` 的 `Date.now()` + 进程内序号拼成，跨进程不稳定；
+ * 传入本函数的 `unitId` 必须是**单位库主键**（如 `unitId` / `aircraftId`），不是 `instanceId`。
+ * 若同格同库键有多份副本（如拆分出的同型单位），先按格号再稳定排序保留输入顺序；
+ * 输入数组本身由既有投影按固定规则构造，不在比较器里回退到实例 id。
+ * 故快照里所有「需要挑一个」的列表都在这里按**盘面位置 + 单位库键**排好，策略层不再排序。
  */
 function compareStableUnit(
   a: { hex: AiHex; unitId: string },
@@ -264,7 +270,7 @@ function compareStableUnit(
   const bc = b.hex.col
   if (ac !== bc) return ac - bc
   if (a.hex.row !== b.hex.row) return a.hex.row - b.hex.row
-  return a.unitId.localeCompare(b.unitId)
+  return a.unitId < b.unitId ? -1 : a.unitId > b.unitId ? 1 : 0
 }
 
 /**
@@ -281,7 +287,7 @@ function rebuildSnapshotOf(
   if (w.segmentStep?.id !== 'reinforcement.rebuild') return null
   const candidates = w.rebuildCandidates
     .slice()
-    .sort((a, b) => compareHex(a.hex, b.hex) || a.name.localeCompare(b.name))
+    .sort((a, b) => compareHex(a.hex, b.hex) || compareText(a.name, b.name))
   for (const unit of candidates) {
     if (memory.rebuildUnitIds.includes(unit.instanceId)) continue
     if ('aircraftId' in unit) {
@@ -332,7 +338,7 @@ function rebuildSnapshotOf(
     const first = [...groups.values()]
       .filter((group) => group.others > 0)
       .map((group) => group.unit)
-      .sort((a, b) => compareHex(a.hex, b.hex) || a.name.localeCompare(b.name))[0]
+      .sort((a, b) => compareHex(a.hex, b.hex) || compareText(a.name, b.name))[0]
     if (first !== undefined) {
       const partners = w.mergePartnerIds(first.instanceId)
       if (partners.length === 1 && partners[0] !== undefined)
@@ -552,7 +558,7 @@ function moveBranchOf(
             !memory.railTriedDumps.includes(dump.id) &&
             facts.hasRail(dump.hex),
         )
-        .sort((a, b) => compareHex(a.hex, b.hex) || a.id.localeCompare(b.id))
+        .sort((a, b) => compareHex(a.hex, b.hex) || a.sp - b.sp || a.t - b.t)
       for (const dump of dumps) {
         const toHex = closerTargets(dump.hex).find(
           (hex) => w.railPathBetween(dump.hex, hex, side) !== null,
@@ -823,12 +829,12 @@ export function snapshotOf(
       ? w.refitStartBases
           .filter((base) => !memory.refitBaseIds.includes(base.id))
           .slice()
-          .sort((a, b) => compareHex(a.hex, b.hex) || a.id.localeCompare(b.id))
+          .sort((a, b) => compareHex(a.hex, b.hex) || a.level - b.level)
           .flatMap((base) => {
             const inactive = w
               .airInactiveAtBase(base.id)
               .slice()
-              .sort((a, b) => a.name.localeCompare(b.name))
+              .sort((a, b) => compareText(a.name, b.name))
             /*
              * 15.1B：一次整备最多 `min(等级×2 / 简易机场 1, 激活堆叠余额)` 架。
              * 超过这个数引擎会以 15.1B 拒绝（实测把整基地一次塞进去连吃 16 条拒绝）。
@@ -844,7 +850,7 @@ export function snapshotOf(
               .slice()
               .sort(
                 (a, b) =>
-                  compareHex(a.hex, b.hex) || a.sp + a.t - (b.sp + b.t) || a.id.localeCompare(b.id),
+                  compareHex(a.hex, b.hex) || a.sp + a.t - (b.sp + b.t) || a.sp - b.sp || a.t - b.t,
               )[0]
             if (aircraft.length === 0 || dump === undefined) return []
             return [
@@ -906,7 +912,7 @@ export function snapshotOf(
     groupTargets: needsSp
       ? w.arrivalSpGroupTargets
           .map((target) => ({ hexText: target.hexText, sp: target.sp, group: target.group }))
-          .sort((a, b) => a.hexText.localeCompare(b.hexText))
+          .sort((a, b) => compareText(a.hexText, b.hexText))
       : [],
     trainPending: needsTrain,
     trainHexes: needsTrain
@@ -1301,7 +1307,7 @@ function execute(
     case 'overstackDestroy': {
       // 4.8a 默认取舍：先毁 RE 最大的（损失枚数最少），同 RE 按名称稳定
       for (const duty of w.overstackDuties) {
-        const units = duty.units.slice().sort((a, b) => b.re - a.re || a.name.localeCompare(b.name))
+        const units = duty.units.slice().sort((a, b) => b.re - a.re || compareText(a.name, b.name))
         let remaining = duty.combatRe
         for (const unit of units) {
           if (remaining <= 10) break
@@ -1479,8 +1485,8 @@ function execute(
           )
           .sort((a, b) =>
             compareStableUnit(
-              { hex: a.air.hex, unitId: a.air.instanceId },
-              { hex: b.air.hex, unitId: b.air.instanceId },
+              { hex: a.air.hex, unitId: a.air.aircraftId },
+              { hex: b.air.hex, unitId: b.air.aircraftId },
             ),
           )[0]
         if (pick === undefined) {
@@ -1621,7 +1627,8 @@ function execute(
         const dumps = [...(entry?.dumps ?? [])].sort(
           (a, b) =>
             holdingsToT({ sp: b.sp, t: b.t }) - holdingsToT({ sp: a.sp, t: a.t }) ||
-            a.id.localeCompare(b.id),
+            a.sp - b.sp ||
+            a.t - b.t,
         )
         const picked = new Set(w.combatSupplyDumpPicks[side])
         const availableT = (): number =>
