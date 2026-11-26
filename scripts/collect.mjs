@@ -21,7 +21,10 @@
  *   --out       输出 JSONL 路径；默认 ./ai-training-data.jsonl
  *   --workers   并行 worker 进程数，默认 1；>1 时先写 .part-N，再合并
  *   --keep-shards  合并后保留 .part-N（默认删除）
- *   --include-refused  连被引擎拒绝的步也写入（默认写，便于诊断）
+ *   --include-refused  连被拒绝/空转的步也写入（默认只写 ok 且盘面有变化的步）
+ *   --include-candidates  记录里附完整候选动作（默认只附 candidateKeys）
+ *   --bundle  训练 bundle 文件；默认 .training-bundle/training-runner.mjs
+ *   --no-bundle  不预编译，回退 Vite SSR（仅诊断用）
  *   --quiet     不打印每步进度
  */
 import { execSync, fork } from 'node:child_process'
@@ -29,7 +32,12 @@ import { createReadStream, createWriteStream, mkdirSync, unlinkSync } from 'node
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
-import { createServer } from 'vite'
+
+import {
+  DEFAULT_TRAINING_BUNDLE,
+  ensureTrainingBundle,
+  loadTrainingRuntime,
+} from './lib/training-runtime.mjs'
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url)
 
@@ -78,7 +86,14 @@ function readOptions(args, outPath, workerIndex, workers) {
     episodes: nonNegativeInt(args, 'episodes', 1),
     steps: positiveInt(args, 'steps', 100),
     seed: nonNegativeInt(args, 'seed', 20261126),
-    includeRefused: args['include-refused'] !== 'false',
+    includeRefused: args['include-refused'] === true,
+    includeCandidates: args['include-candidates'] === true,
+    bundlePath:
+      args['no-bundle'] === true
+        ? null
+        : typeof args.bundle === 'string'
+          ? resolve(args.bundle)
+          : DEFAULT_TRAINING_BUNDLE,
     quiet: args.quiet === true,
     outPath,
     workerIndex,
@@ -86,48 +101,18 @@ function readOptions(args, outPath, workerIndex, workers) {
   }
 }
 
-async function relaxSsrTransport(server) {
-  const apply = (runner) => {
-    if (runner?.transport !== undefined) runner.transport.timeout = 600_000
-  }
-  apply(server.environments?.ssr?.runner)
-  /*
-   * `ssrLoadModule` 实际用的是 `_ssrCompatModuleRunner`，它自己 new 了一个
-   * `createServerModuleRunnerTransport`，和 environment.runner 不是同一个对象。
-   * 先用一个轻量模块把 runner 实例化，再放宽它的传输超时。
-   */
-  if (server._ssrCompatModuleRunner === undefined)
-    await server.ssrLoadModule('/src/ai/training/contract.ts')
-  apply(server._ssrCompatModuleRunner)
-}
-
 async function collectInto(options, metaType) {
   mkdirSync(dirname(options.outPath), { recursive: true })
   const stream = createWriteStream(options.outPath, { flags: 'w' })
-  const server = await createServer({
-    appType: 'custom',
-    logLevel: 'error',
-    // 每个 worker 独立 dep cache；多个 Vite 进程共用 node_modules/.vite 会争锁。
-    cacheDir: resolve(`node_modules/.vite/collect-worker-${String(options.workerIndex)}`),
-    server: {
-      middlewareMode: true,
-      hmr: false,
-      // 多 worker 各自一个 WS 端口；Vite 在 middleware 模式仍会建 WS 服务。
-      ws: { port: 24678 + options.workerIndex },
-    },
-  })
-  /*
-   * Vite 8 的 SSR module-runner 默认 60s 传输超时。本项目首次编译 `src/data`
-   * 的空档实测会超过 60s（磁盘冷缓存时约 100s），会被误判成 transport timeout。
-   * 只放宽 CLI 的 SSR 传输等待；不改源码模块和构建行为。
-   */
-  await relaxSsrTransport(server)
-
+  let runtime = null
   let total = 0
   try {
-    const { createTrainingEnv } = await server.ssrLoadModule('/src/ai/training/env.ts')
-    const { decideAiAction } = await server.ssrLoadModule('/src/ai/policy.ts')
-    const { AI_TRAIN_VERSION } = await server.ssrLoadModule('/src/ai/training/contract.ts')
+    runtime = await loadTrainingRuntime({
+      bundlePath: options.bundlePath,
+      workerIndex: options.workerIndex,
+      cacheDir: resolve(`node_modules/.vite/collect-worker-${String(options.workerIndex)}`),
+    })
+    const { createTrainingEnv, decideAiAction, AI_TRAIN_VERSION } = runtime
 
     stream.write(
       `${JSON.stringify({
@@ -138,6 +123,9 @@ async function collectInto(options, metaType) {
         seed: options.seed,
         episodes: options.episodes,
         maxSteps: options.steps,
+        includeRefused: options.includeRefused,
+        includeCandidates: options.includeCandidates,
+        runtime: runtime.source,
         ...(metaType === 'shard-meta'
           ? { workerIndex: options.workerIndex, workers: options.workers }
           : {}),
@@ -172,7 +160,9 @@ async function collectInto(options, metaType) {
             )
           break
         }
+        const candidates = env.candidates()
         const result = env.step(action)
+        const candidateKeys = candidates.map((candidate) => candidate.key)
         const record = {
           version: AI_TRAIN_VERSION,
           episode,
@@ -184,12 +174,33 @@ async function collectInto(options, metaType) {
           executedKey: result.info.executedKey,
           action,
           ok: result.info.ok,
+          stateChanged: result.info.stateChanged,
+          noop: result.info.noop,
+          noopSteps: result.info.noopSteps,
+          stalled: result.info.stalled,
+          truncated: result.info.truncated,
+          candidateCount: candidateKeys.length,
+          candidateKeys,
+          ...(options.includeCandidates
+            ? {
+                candidates: candidates.map((candidate) => ({
+                  key: candidate.key,
+                  family: candidate.family,
+                  source: candidate.source,
+                  action: candidate.action,
+                })),
+              }
+            : {}),
           ...(result.info.rule === undefined ? {} : { rule: result.info.rule }),
           ...(result.info.reason === undefined ? {} : { reason: result.info.reason }),
           reward: result.reward,
           done: result.done,
         }
-        if (options.includeRefused || result.info.ok) {
+        /*
+         * 默认只落「引擎接受 + 盘面真的变了」的正样本。
+         * 被拒/空转的步不是行为克隆数据；需要诊断时显式 --include-refused。
+         */
+        if (options.includeRefused || (result.info.ok && result.info.stateChanged)) {
           stream.write(`${JSON.stringify(record)}\n`)
           total += 1
         }
@@ -206,7 +217,7 @@ async function collectInto(options, metaType) {
     await new Promise((resolveClose, rejectClose) => {
       stream.end((error) => (error ? rejectClose(error) : resolveClose()))
     })
-    await server.close()
+    if (runtime !== null) await runtime.close()
   }
   return total
 }
@@ -222,7 +233,10 @@ function spawnShard(options, workerIndex) {
       `--workers=${String(options.workers)}`,
       `--worker-index=${String(workerIndex)}`,
     ]
-    if (!options.includeRefused) args.push('--include-refused=false')
+    if (options.includeRefused) args.push('--include-refused')
+    if (options.includeCandidates) args.push('--include-candidates')
+    if (options.bundlePath === null) args.push('--no-bundle')
+    else args.push(`--bundle=${options.bundlePath}`)
     if (options.quiet) args.push('--quiet')
     const child = fork(SCRIPT_PATH, args, {
       stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
@@ -270,6 +284,9 @@ async function mergeShards(shardPaths, outPath, keepShards) {
         seed: first.seed,
         episodes: first.episodes,
         maxSteps: first.maxSteps,
+        includeRefused: first.includeRefused,
+        includeCandidates: first.includeCandidates,
+        runtime: first.runtime,
         workers: first.workers,
       })}\n`,
     )
@@ -312,6 +329,7 @@ async function main() {
 
   if (args['worker-index'] !== undefined) {
     const options = readOptions(args, outPath, workerIndex, workers)
+    if (options.bundlePath !== null) await ensureTrainingBundle(options.bundlePath)
     const total = await collectInto(options, 'shard-meta')
     console.log(`[worker ${String(workerIndex)}] 采集完成：${String(total)} 条 → ${outPath}`)
     return
@@ -319,12 +337,14 @@ async function main() {
 
   if (workers === 1) {
     const options = readOptions(args, outPath, 0, 1)
+    if (options.bundlePath !== null) await ensureTrainingBundle(options.bundlePath)
     const total = await collectInto(options, 'meta')
     console.log(`采集完成：${String(total)} 条 → ${outPath}`)
     return
   }
 
   const options = readOptions(args, outPath, 0, workers)
+  if (options.bundlePath !== null) await ensureTrainingBundle(options.bundlePath)
   const shardPaths = Array.from(
     { length: workers },
     (_, index) => `${outPath}.part-${String(index)}`,
