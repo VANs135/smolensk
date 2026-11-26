@@ -63,4 +63,36 @@ describe('TrainingEnv', () => {
     const result = env.step(advance.action)
     expect(result.info.ok).toBe(true)
   })
+
+  it('checkpoint/restore 回同一观测，且恢复后可继续 step', () => {
+    const env = createTrainingEnv({ scenarioId: 'Intro', seed: 20261126 })
+    const initial = env.reset()
+    env.checkpoint()
+
+    const moved = env.step({ kind: 'advance' })
+    expect(moved.done).toBe(false)
+    expect(env.steps).toBe(1)
+    expect(JSON.stringify(env.observe())).not.toBe(JSON.stringify(initial))
+
+    env.restoreCheckpoint()
+    expect(env.steps).toBe(0)
+    expect(env.done).toBe(false)
+    expect(JSON.stringify(env.observe())).toBe(JSON.stringify(initial))
+
+    const again = env.step({ kind: 'advance' })
+    expect(again.info.actionKey).toBe('advance')
+    expect(again.done).toBe(false)
+  })
+
+  it('checkpoint 可截断后恢复 done 标记', () => {
+    const env = createTrainingEnv({ scenarioId: 'Intro', seed: 20261126, maxSteps: 1 })
+    env.reset()
+    env.checkpoint()
+    const truncated = env.step({ kind: 'wait', reason: '训练截断用例' })
+    expect(truncated.done).toBe(true)
+
+    env.restoreCheckpoint()
+    expect(env.done).toBe(false)
+    expect(() => env.step({ kind: 'advance' })).not.toThrow()
+  })
 })

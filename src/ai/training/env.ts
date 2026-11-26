@@ -28,6 +28,7 @@ import {
   type AiStepResult,
 } from '../driver'
 import type { AiStepRecord } from '../trace'
+import { deserializeSession, serializeSession } from '@/engine/session'
 import { createMemoryStorage } from '@/shared/storage'
 import { useGameSessionStore } from '@/stores/session'
 import { useHotseatStore } from '@/stores/hotseat'
@@ -89,12 +90,28 @@ export interface TrainingEnv {
   candidates(): TrainingCandidate[]
   /** 只读快照（不含训练投影；诊断用） */
   snapshot(): AiSnapshot
+  /**
+   * 把当前局面写进内存存档（用于多 worker 回到同一起点）
+   *
+   * 只保存一份；再调用会覆盖上一份。与 `reset` 不同：不重建 Pinia，也不重跑初设。
+   */
+  checkpoint(): void
+  /** 回到最近一次 `checkpoint`，并清空 AI 内存；失败即抛，不静默继续 */
+  restoreCheckpoint(): void
+}
+
+interface TrainingCheckpoint {
+  /** `serializeSession` 的原文（只含会话；盘面另存） */
+  sessionText: string
+  /** `workbench.snapshotBoard()` 的深拷贝 */
+  board: unknown
 }
 
 interface EnvState {
   ctx: AiContext
   identity: TrainingIdentity
   memory: AiMemory
+  checkpoint: TrainingCheckpoint | null
   options: Required<
     Pick<TrainingEnvOptions, 'scenarioId' | 'seed' | 'control' | 'maxSetupSteps' | 'maxSteps'>
   >
@@ -176,6 +193,7 @@ function bootstrap(options: EnvState['options']): EnvState {
     ctx,
     identity,
     memory,
+    checkpoint: null,
     options,
     started: true,
     done: session.terminated,
@@ -226,6 +244,38 @@ export function createTrainingEnv(defaults: TrainingEnvOptions): TrainingEnv {
     snapshot() {
       const current = ensure()
       return snapshotOf(current.ctx, current.memory, current.options.control)
+    },
+    checkpoint() {
+      const current = ensure()
+      const game = current.ctx.session.session
+      if (game === null) throw new Error('TrainingEnv: 没有会话，不能 checkpoint')
+      /*
+       * 不用 `session.saveNow()`：它会为「读档失败回滚」再抓一份当前盘面，
+       * 而训练回滚经常发生在移动/战斗结算中途，`snapshotBoard` 会按 UI 存档守卫拒绝。
+       * 这里直接抓「会话 + 盘面」；训练侧只在明确的起点调用，守卫条件由调用方保证。
+       */
+      current.checkpoint = {
+        sessionText: serializeSession(game),
+        board: current.ctx.workbench.snapshotBoard(),
+      }
+    },
+    restoreCheckpoint() {
+      const current = ensure()
+      if (current.checkpoint === null) throw new Error('TrainingEnv: 尚未 checkpoint，不能恢复')
+      /*
+       * 绕过 `session.loadNow()`：它也会先抓当前盘面做备份，训练回滚可能正处在
+       * 结算中途。这里的两份快照都来自同一局，直接替换会话 + 盘面即可。
+       */
+      const restored = deserializeSession(current.checkpoint.sessionText)
+      current.ctx.session.session = restored
+      current.ctx.workbench.restoreBoard(current.checkpoint.board, true)
+      current.ctx.session.lastAdvanceKind = null
+      current.ctx.session.error = null
+      // 记忆里可能挂着上一段的动作/事实；回滚后必须换新，不能把旧状态带进下一段。
+      current.memory = createAiMemory()
+      current.steps = 0
+      current.done = current.ctx.session.terminated
+      current.identity.refresh()
     },
     actionKey(action) {
       return canonicalActionKeyOf(action, ensure().identity.actionIds)
