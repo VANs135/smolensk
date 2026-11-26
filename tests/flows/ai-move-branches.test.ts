@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { createAiMemory, runAiStep } from '@/ai/driver'
+import { createAiMemory, runAiStep, snapshotOf } from '@/ai/driver'
 import { decideAiAction, type AiSnapshot } from '@/ai/policy'
+import { candidateActionsOf } from '@/ai/training/candidates'
+import { createTrainingIdentity } from '@/ai/training/identity'
 import { useGameSessionStore, useSetupStore } from '@/stores'
 
 import { CORE_HEX, NEAR_HEX, groundRecord, newConsole, placeGround } from './sop-harness'
@@ -95,6 +97,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       transport: null,
       constructionMarker: null,
       gauge: null,
+      dumpBlow: null,
     },
     air: {
       inProgress: false,
@@ -522,6 +525,27 @@ describe('批 2 AI C 段支线：落到既有入口', () => {
     expect(result.ok, JSON.stringify({ err: w.exclusiveError, log: w.log[0] })).toBe(true)
     expect(w.constructionMarkerPieces).toHaveLength(1)
     expect(w.constructionMarkers).toBe(0)
+  })
+
+  it('12.11a：快照与候选表给 dumpBlow，驱动落到 destructDumpNow', () => {
+    const w = newConsole()
+    w.spDumps.push({ id: 'sd1', hex: { ...CORE_HEX }, side: 'axis', sp: 2, t: 0 })
+    atMovementStep(w)
+
+    const ctx = aiCtx(w)
+    const memory = createAiMemory()
+    const snap = snapshotOf(ctx, memory, 'both')
+    expect(snap.branch.dumpBlow).toEqual({ dumpId: 'sd1' })
+    const candidates = candidateActionsOf(snap, createTrainingIdentity(ctx))
+    expect(candidates.some((candidate) => candidate.action.kind === 'dumpBlow')).toBe(true)
+
+    const result = runAiStep(ctx, {
+      memory,
+      decider: () => ({ kind: 'dumpBlow', dumpId: 'sd1' }),
+    })
+    expect(result.intent).toBe('dumpBlow:sd1')
+    expect(result.ok, JSON.stringify({ log: w.log[0] })).toBe(true)
+    expect(w.dumpDestructionAttempts.sd1).toBe(1)
   })
 
   it('13.2f：AI 自己把同格补给站里的 SP 装上运输点数', () => {

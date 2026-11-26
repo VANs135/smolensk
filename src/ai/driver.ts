@@ -102,6 +102,8 @@ export interface AiMemory {
   constructionDone: boolean
   /** 批 2：本环节已试过换轨的铁路修理单位 */
   gaugeTried: string[]
+  /** 12.11a：本环节已试过销毁的补给站（失败后不再反复选同一座） */
+  dumpBlowTried: string[]
 }
 
 export function createAiMemory(): AiMemory {
@@ -130,6 +132,7 @@ export function createAiMemory(): AiMemory {
     transportTried: [],
     constructionDone: false,
     gaugeTried: [],
+    dumpBlowTried: [],
   }
 }
 
@@ -240,6 +243,7 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.transportTried = []
   memory.constructionDone = false
   memory.gaugeTried = []
+  memory.dumpBlowTried = []
 }
 
 function dedupeSortedHexes(hexes: readonly AiHex[]): AiHex[] {
@@ -473,6 +477,20 @@ function moveBranchOf(
     if (hex !== undefined) constructionMarker = { marker: 'bridge', hex }
   }
 
+  // 12.11a：销毁己方补给站（反应段按 `actingSide`；每站每阶段只能试一次）
+  let dumpBlow: AiMoveBranchSnapshot['dumpBlow'] = null
+  if (can.has('move.dumpBlow')) {
+    const dump = w.actingSpDumps
+      .filter(
+        (item) =>
+          item.sp > 0 &&
+          (w.dumpDestructionAttempts[item.id] ?? 0) === 0 &&
+          !memory.dumpBlowTried.includes(item.id),
+      )
+      .sort((a, b) => compareHex(a.hex, b.hex) || compareText(a.id, b.id))[0]
+    if (dump !== undefined) dumpBlow = { dumpId: dump.id }
+  }
+
   // 5.4：strat→move 以便开拔；已结束且邻敌的 move→combat 转入战斗姿态
   let modeSwitch: AiMoveBranchSnapshot['modeSwitch'] = null
   if (can.has('move.modeChange')) {
@@ -655,6 +673,7 @@ function moveBranchOf(
     transport,
     constructionMarker,
     gauge,
+    dumpBlow,
   }
 }
 
@@ -1385,6 +1404,11 @@ function execute(
       w.switchUnitMode(action.mode)
       const unit = w.units.find((item) => item.instanceId === action.unitId)
       return unit !== undefined && unit.mode.mode === action.mode
+    }
+    case 'dumpBlow': {
+      const ok = w.destructDumpNow(action.dumpId)
+      if (!ok) memory.dumpBlowTried.push(action.dumpId)
+      return ok
     }
     case 'overrun': {
       memory.overrunTried.push(hexKeyOf(action.hex))

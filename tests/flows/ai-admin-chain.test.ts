@@ -93,6 +93,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       transport: null,
       constructionMarker: null,
       gauge: null,
+      dumpBlow: null,
     },
     air: {
       inProgress: false,

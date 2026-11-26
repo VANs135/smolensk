@@ -7,7 +7,7 @@
  *
  * v1 覆盖：
  * - 盘面提问 / 推进 / 初设 / 整备 / 到货 / 重建；
- * - 移动主链与 C 段支线（换模式、突袭、铁路、装卸、建造标记、换轨）；
+ * - 移动主链与 C 段支线（换模式、销毁补给站、突袭、铁路、装卸、建造标记、换轨）；
  * - 空军任务、炮击、战斗结算（含补给付不出时的 `combatSkip`）、补给、损耗。
  *
  * 不覆盖 / 只给一个候选的组合：
@@ -175,6 +175,7 @@ export function candidateActionsOf(
   if (snapshot.branch.constructionMarker !== null) {
     add({ kind: 'constructionMarker', ...snapshot.branch.constructionMarker })
   }
+  if (snapshot.branch.dumpBlow !== null) add({ kind: 'dumpBlow', ...snapshot.branch.dumpBlow })
 
   for (const base of snapshot.refit.bases) {
     add({

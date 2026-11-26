@@ -77,6 +77,8 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
       return 'moveFinish'
     case 'modeChangeTo':
       return `modeChangeTo:${keyOf(ids.unit, action.unitId)}:${action.mode}`
+    case 'dumpBlow':
+      return `dumpBlow:${keyOf(ids.dump, action.dumpId)}`
     case 'overrun':
       return `overrun:${hexOf(action.hex)}`
     case 'railMove':

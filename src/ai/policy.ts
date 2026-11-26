@@ -260,6 +260,8 @@ export interface AiMoveBranchSnapshot {
   constructionMarker: { marker: 'bridge' | 'airStrip'; hex: AiHex } | null
   /** 13.3f：本阶段刚走入非本方轨距格的铁路修理单位 */
   gauge: { unitId: string; hex: AiHex } | null
+  /** 12.11a：本环节可尝试销毁的一座己方补给站（只给首个，未枚举全部站） */
+  dumpBlow: { dumpId: string } | null
 }
 
 /** B 增援：重建 / 整编候选（一次只给一个，避免每步全量预演） */
@@ -374,6 +376,8 @@ export type AiAction =
   | { kind: 'moveFinish' }
   /* 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
   | { kind: 'modeChangeTo'; unitId: string; mode: 'move' | 'combat' }
+  /** 12.11a：尝试销毁一座己方补给站的全部 SP（骰面由引擎当场掷） */
+  | { kind: 'dumpBlow'; dumpId: string }
   | { kind: 'overrun'; hex: AiHex }
   | { kind: 'railMove'; unitId: string; toHex: AiHex }
   | { kind: 'railMoveSp'; dumpId: string; amount: number; toHex: AiHex }
@@ -473,6 +477,8 @@ export function actionKeyOf(action: AiAction): string {
       return `moveClick:${hexKeyOf(action.hex)}`
     case 'modeChangeTo':
       return `modeChangeTo:${action.unitId}:${action.mode}`
+    case 'dumpBlow':
+      return `dumpBlow:${action.dumpId}`
     case 'overrun':
       return `overrun:${hexKeyOf(action.hex)}`
     case 'railMove':
@@ -548,6 +554,7 @@ export const AI_ACTION_KINDS = [
   'moveClick',
   'moveFinish',
   'modeChangeTo',
+  'dumpBlow',
   'overrun',
   'railMove',
   'railMoveSp',

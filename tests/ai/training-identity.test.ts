@@ -75,6 +75,7 @@ describe('canonical action key', () => {
       { kind: 'combatSupply', side: 'advance', attackerDumpId: null, defenderDumpId: null },
       { kind: 'attritionApply', key: 'x', allocation: [] },
       { kind: 'refitBase', baseId: 'b', aircraftIds: [], dumpId: 'd' },
+      { kind: 'dumpBlow', dumpId: 'd' },
       { kind: 'rebuild', unitId: 'u', mode: 'dead', hex: null },
     ]
     for (const action of samples) {
