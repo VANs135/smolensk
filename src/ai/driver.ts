@@ -711,13 +711,23 @@ export function snapshotOf(
   const hasStepped = interaction !== null && interaction.steps.length > 0
   const currentHexKeys = new Set(friendly.map((unit) => hexKeyOf(unit.hex)))
   const visitedHexKeys = new Set(interaction?.steps.map((step) => hexKeyOf(step.to)) ?? [])
-  // 仅「刚开拔、还没落子」时算可达格（groupReachable 是重投影，别每步都算）
-  const reachableHexes =
-    moveActive && !hasStepped
-      ? (w.groupReachable.hexes as { hex: AiHex }[])
-          .map((node) => node.hex)
-          .filter((hex) => !visitedHexKeys.has(hexKeyOf(hex)) && !currentHexKeys.has(hexKeyOf(hex)))
-      : []
+  /*
+   * 可到达格：**每一步之后都要给**
+   *
+   * 修前此处在 `hasStepped` 之后返回空集（原本只是"groupReachable 是重投影，别每步都算"的
+   * 性能取舍），结果训练/桥接客户端一旦落了一步就再也看不到 `moveClick` 候选，表现为
+   * "一次落点即结束移动"，与规则相反：`reachableForMove` 本身按 `ma - spentMp` 过滤
+   * （engine/rules/move-interaction.ts），剩余 MP 与合法地形都算在里面，逐格走是正道。
+   *
+   * 代价是每步多算一次重投影；只在"移动交互仍活着"时算，结束(`finished`)/余量为 0 时
+   * `groupReachable` 自己会返回空集，不会白算太久。
+   * 仍然排除"已走过的格"和"当前所在格"——不是规则禁止，而是候选集不必把"原地不动"当选项。
+   */
+  const reachableHexes = moveActive
+    ? (w.groupReachable.hexes as { hex: AiHex }[])
+        .map((node) => node.hex)
+        .filter((hex) => !visitedHexKeys.has(hexKeyOf(hex)) && !currentHexKeys.has(hexKeyOf(hex)))
+    : []
 
   /*
    * 相邻的敌方守方格（仅作候选；合法性由 select/begin 入口判定）
