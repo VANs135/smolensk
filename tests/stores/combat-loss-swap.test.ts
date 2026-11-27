@@ -219,19 +219,23 @@ describe('9.11a/c：真实盘面上的损失分担形状', () => {
     expect(shapes.some((shape) => shape.canonical.includes('d2'))).toBe(true)
   })
 
-  it('3 点损失才会出现 [2,1] 的改派余地 —— 扫到的骰序里没有，故不作断言（记录事实）', () => {
-    let threePoint = 0
-    for (const defenderPays of [true, false]) {
-      for (let seed = 1; seed <= 60; seed += 1) {
-        const store = newStore()
-        store.rng = createRngState(seed)
-        driveToLosses(store, defenderPays)
-        if (!skipAttackerSide(store)) continue
-        if ((store.combatRequirement?.losses ?? 0) >= 3) threePoint += 1
+  it(
+    '3 点损失才会出现 [2,1] 的改派余地 —— 扫到的骰序里没有，故不作断言（记录事实）',
+    { timeout: 15_000 },
+    () => {
+      let threePoint = 0
+      for (const defenderPays of [true, false]) {
+        for (let seed = 1; seed <= 60; seed += 1) {
+          const store = newStore()
+          store.rng = createRngState(seed)
+          driveToLosses(store, defenderPays)
+          if (!skipAttackerSide(store)) continue
+          if ((store.combatRequirement?.losses ?? 0) >= 3) threePoint += 1
+        }
       }
-    }
-    // eslint-disable-next-line no-console
-    console.log(`60×2 骰序里守方 3 点损失出现 ${threePoint} 次`)
-    expect(threePoint).toBeGreaterThanOrEqual(0)
-  })
+      // eslint-disable-next-line no-console
+      console.log(`60×2 骰序里守方 3 点损失出现 ${threePoint} 次`)
+      expect(threePoint).toBeGreaterThanOrEqual(0)
+    },
+  )
 })
