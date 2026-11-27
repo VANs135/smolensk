@@ -89,4 +89,3 @@ describe('9.11a/c 损失分担候选：先改派、再确认', () => {
     expect(combatLossCandidates(losses())).toEqual([{ kind: 'combatLosses' }])
   })
 })
-
