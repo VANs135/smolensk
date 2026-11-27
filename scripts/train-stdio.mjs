@@ -21,6 +21,7 @@
  *   --scenario=1          默认剧本（可被 reset 覆盖）
  *   --seed=20261126       默认种子（可被 reset 覆盖）
  *   --control=both        both / axis / soviet
+ *   --profile=full        AI 档位覆盖（full / baseline）；桥接客户端传 full，避免 baseline 把战斗投影关掉
  *   --max-steps=0          0 = 只由终止/空转截断
  *   --max-noop-steps=50    连续空转截断；0 = 关闭
  *   --max-setup-steps=500  初设补步上限
@@ -78,6 +79,18 @@ function buildDefaults(args) {
   if (args.scenario !== undefined) defaults.scenarioId = stringArg('scenario', args.scenario)
   if (args.seed !== undefined) defaults.seed = integerArg('seed', args.seed)
   if (args.control !== undefined) defaults.control = stringArg('control', args.control)
+  /*
+   * --profile=full：人类客户端桥接用（Godot 客户端只借候选面驱动，不跑 AI 决策）。
+   * 引擎按剧本取档位（只有 Intro 是 full），baseline 会把「战斗段可选防御格」等纯投影一并关掉，
+   * 客户端因此在战役剧本里根本选不到战斗。见 env.ts TrainingEnvOptions.aiProfile。
+   */
+  if (args.profile !== undefined) {
+    const profile = stringArg('profile', args.profile)
+    if (profile !== 'full' && profile !== 'baseline') {
+      throw new Error(`--profile 只认 full / baseline，收到 ${profile}`)
+    }
+    defaults.aiProfile = profile
+  }
   if (args['max-steps'] !== undefined) {
     defaults.maxSteps = integerArg('max-steps', args['max-steps'])
   }
@@ -98,6 +111,7 @@ function optionsFromCommand(command) {
     'scenarioId',
     'seed',
     'control',
+    'aiProfile',
     'maxSteps',
     'maxNoopSteps',
     'maxSetupSteps',

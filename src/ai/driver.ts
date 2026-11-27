@@ -774,6 +774,16 @@ export function snapshotOf(
 
   const barrageState = w.barrageState
   const barrageRelevant = barrageState !== null || (w.segmentStep?.id ?? '').endsWith('.barrage')
+  /*
+   * 炮击入口（桥接/训练端）：`barrage.state` 只有 `beginBarrageNow()` 之后才非空，而候选面旧实现
+   * 把 `barrageTarget` / `barrageBegin` 整块压在 `state !== null` 里 ⇒ 谁也没法开出第一枪（自锁）。
+   * 这里只摊平 store 既有判据 `barrageEntryEligible`（10.0e-A/B/D + 10.1a + 10.1b 同一处），
+   * AI 侧不另立口径；能不能真打仍由 `clickHex` / `beginBarrageNow` 判。
+   */
+  const barrageEntryHexes =
+    barrageState === null && barrageRelevant
+      ? enemyHexes.filter((hex) => w.barrageEntryEligible(hex))
+      : []
   const barrageOutcome = barrageState?.outcome
   const outcomeStepLosses =
     barrageOutcome !== undefined &&
@@ -1149,6 +1159,7 @@ export function snapshotOf(
       supplyDumpIds: barrageRelevant ? w.barrageSupplyDumpChoices.map((dump) => dump.id) : [],
       triedTargets: memory.barrageTargets,
       enemyHexes,
+      entryHexes: barrageEntryHexes,
       outcomeStepLosses,
       lossTargets: barrageRelevant
         ? w.barrageLossTargets

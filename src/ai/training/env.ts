@@ -28,6 +28,7 @@ import {
   type AiStepResult,
 } from '../driver'
 import type { AiStepRecord } from '../trace'
+import type { AiProfile } from '../scenario-posture'
 import { deserializeSession, serializeSession } from '@/engine/session'
 import { createMemoryStorage } from '@/shared/storage'
 import { useGameSessionStore } from '@/stores/session'
@@ -57,6 +58,12 @@ export interface TrainingEnvOptions {
    * 0 表示关闭。默认 50；p5 的 combat 段曾在同一批候选上空转 9000 步。
    */
   maxNoopSteps?: number
+  /**
+   * AI 档位覆盖。原本只给规则覆盖回归用（`full`）；当前也给**人类客户端桥接**用：
+   * 桥接只用候选面驱动观战/代打，`baseline` 档会把「战斗段的可选防御格」这类
+   * 纯投影字段一并关掉（driver 的 `attackPlanRelevant`），客户端不是 AI，不该被档位卡住。
+   */
+  aiProfile?: AiProfile
 }
 
 export interface TrainingStepInfo extends AiStepResult {
@@ -130,7 +137,8 @@ interface EnvState {
       TrainingEnvOptions,
       'scenarioId' | 'seed' | 'control' | 'maxSetupSteps' | 'maxSteps' | 'maxNoopSteps'
     >
-  >
+  > &
+    Pick<TrainingEnvOptions, 'aiProfile'>
   started: boolean
   done: boolean
   steps: number
@@ -153,6 +161,7 @@ function normalizeOptions(
     maxSetupSteps: override?.maxSetupSteps ?? defaults?.maxSetupSteps ?? 500,
     maxSteps: override?.maxSteps ?? defaults?.maxSteps ?? 0,
     maxNoopSteps: override?.maxNoopSteps ?? defaults?.maxNoopSteps ?? 50,
+    aiProfile: override?.aiProfile ?? defaults?.aiProfile,
   }
 }
 
@@ -208,7 +217,7 @@ function bootstrap(options: EnvState['options']): EnvState {
   }
 
   const preset = setup.presetSelfSetupNow()
-  const ctx: AiContext = { workbench, session, setup }
+  const ctx: AiContext = { workbench, session, setup, aiProfile: options.aiProfile }
   const memory = createAiMemory()
   const identity = createTrainingIdentity(ctx)
 

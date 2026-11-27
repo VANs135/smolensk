@@ -94,6 +94,11 @@ export interface AiBarrageSnapshot {
   /** 本环节已尝试过的目标格（失败后换下一个） */
   triedTargets: readonly string[]
   enemyHexes: readonly AiHex[]
+  /**
+   * 炮击**入口**格（`barrage.state === null` 时才有值）：store 的 `barrageEntryEligible` 判定过
+   * 的可起炮击格。旧候选面把 `barrageTarget` / `barrageBegin` 压在 state 内 ⇒ 无法开局，故单列。
+   */
+  entryHexes?: readonly AiHex[]
   outcomeStepLosses: number
   lossTargets: readonly { unitId: string; steps: number }[]
 }

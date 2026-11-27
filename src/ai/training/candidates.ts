@@ -15,7 +15,7 @@
  * - 战斗补给按快照首个补给站组合，不枚举所有「站点 × 储备」组合；
  * - 炮击/战斗的入口合法性仍交给引擎。
  */
-import type { AiAction, AiCombatSnapshot, AiHex, AiSnapshot } from '../policy'
+import { hexKeyOf, type AiAction, type AiCombatSnapshot, type AiHex, type AiSnapshot } from '../policy'
 import { canonicalActionKeyOf } from './action-key'
 import type { TrainingIdentity } from './identity'
 
@@ -235,15 +235,46 @@ export function candidateActionsOf(
     if (barrage.state.step === 'barrageDice' || barrage.state.step.includes('dice')) {
       add({ kind: 'barrageDice' })
     }
+    /*
+     * 10.0a：结果可以是「零损失」（noLossExpected），旧实现只在 lossTargets 非空时才给
+     * 一条「全给损」的候选 ⇒ 碰上期望零损失的目标就只有一条必被拒的动作（自锁）。
+     * 这里两条都给：零损失 + 各目标「给到步数」的全量分配，谁对由引擎判。
+     */
+    add({ kind: 'barrageOutcome', losses: [] })
     if (barrage.lossTargets.length > 0) {
       add({ kind: 'barrageOutcome', losses: barrage.lossTargets })
-    } else {
-      add({ kind: 'barrageOutcome', losses: [] })
     }
+  } else if (barrage.entryHexes !== undefined && barrage.entryHexes.length > 0) {
+    /*
+     * 炮击**入口**：`barrage.state === null` 也要给出「点目标格 + 宣布」两条腿。
+     * 修前这两条腿被压在 `state !== null` 里，而 state 只有 `barrageBegin` 之后才建 ⇒
+     * 自锁：训练/桥接端一辈子开不出一枪（web 端靠 UI 按钮绕过去了，所以只有 AI 侧发病）。
+     * 候选池只取 store `barrageEntryEligible` 判过的格（driver 投影 entryHexes），不另立口径。
+     */
+    const tried = new Set(barrage.triedTargets)
+    for (const hex of barrage.entryHexes) {
+      if (!tried.has(hexKeyOf(hex))) add({ kind: 'barrageTarget', hex })
+    }
+    /*
+     * 10.0：`beginBarrageNow` 前必须先点参炸单位（引擎原话「请先选择参炸单位」）。
+     * 这些单位同样只在 state 内才会列 ⇒ 入口段一并给出，disabled 的照旧不列（不摆灰项）。
+     */
+    for (const choice of barrage.choices) {
+      if (!choice.disabled) add({ kind: 'barrageToggleUnit', unitId: choice.unitId })
+    }
+    add({ kind: 'barrageBegin' })
   }
 
-  for (const hex of snapshot.combat.adjacentDefenderHexes) add({ kind: 'combatSelect', hex })
-  if (snapshot.combat.defenderHex !== null) add({ kind: 'combatBegin' })
+  /*
+   * 9.1b：只有 `combat.combat` 环节才轮得到「选防御格 / 宣布进攻」。
+   * `combat.*` 这一段里还有 `combat.barrage`（炮击环节，只认炮兵），
+   * 旧口径按 phase 给 combatSelect ⇒ 炮击环节也会冒出防御格候选，点了必被 9.1a 拒。
+   */
+  const inCombatStep = snapshot.segment === 'combat.combat'
+  if (inCombatStep) {
+    for (const hex of snapshot.combat.adjacentDefenderHexes) add({ kind: 'combatSelect', hex })
+    if (snapshot.combat.defenderHex !== null) add({ kind: 'combatBegin' })
+  }
   const combatState = snapshot.combat.state
   if (combatState !== null && !combatState.finished) {
     switch (combatState.step) {
@@ -251,8 +282,15 @@ export function candidateActionsOf(
         for (const action of combatSupplyCandidates(snapshot.combat)) add(action)
         break
       case 'declareAr':
-        add({ kind: 'combatDeclareAr', side: 'attacker' })
-        add({ kind: 'combatDeclareAr', side: 'defender' })
+        /*
+         * 9.6：守方后宣布 ⇒ 攻方还没落定前只列攻方这一条，否则会出「重复宣布攻方」的空转
+         * （`declareCombatArStep('attacker')` 再点一次仍返回 true，但 state 不前进）。
+         */
+        if (combatState.declaredAttackerArUnitId === undefined) {
+          add({ kind: 'combatDeclareAr', side: 'attacker' })
+        } else {
+          add({ kind: 'combatDeclareAr', side: 'defender' })
+        }
         break
       case 'declareTerrain':
       case 'surprise':
