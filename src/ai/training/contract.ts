@@ -31,6 +31,22 @@ export interface TrainingEntity {
   mode?: string
   /** 地面单位的 RE；其它无 */
   re?: number
+  /**
+   * 地面单位：朝向面的印值 A / AR / MA 与机动类型（5.4a「一切数值以朝向那一面为基准」）
+   *
+   * 只做**透传**：与 Web 版「选中算子」卡同一口径（`raw.attack/ar/ma` + `raw.mobility`），
+   * 不在这里做任何换算。
+   */
+  attack?: number
+  ar?: number
+  ma?: number
+  mobility?: string
+  /** 地面单位：本阶段已耗 MP（6.1a；MA 是一阶段总额度，不是单步额度） */
+  mpSpent?: number
+  /** 地面单位：是否已加注燃料（12.5a） */
+  fuelled?: boolean
+  /** 地面单位：本轮移动是否已结束（4.5a-A / 6.1c / 6.2b） */
+  movementEnded?: boolean
   /** 飞机状态（active/inactive） */
   airStatus?: string
   /** 补给站持有量 */

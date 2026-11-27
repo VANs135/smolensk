@@ -232,6 +232,14 @@ export function createTrainingIdentity(ctx: AiContext): TrainingIdentity {
         steps: unit.steps,
         mode: unit.mode.mode,
         re: unit.re,
+        // 朝向面的印值与移动记账：给客户端画「选中算子」卡用（与 Web 版同口径，只透传）
+        attack: unit.raw.attack,
+        ar: unit.raw.ar,
+        ma: unit.raw.ma,
+        mobility: unit.raw.mobility,
+        mpSpent: unit.mpSpent,
+        fuelled: unit.fuelled,
+        movementEnded: unit.movementEnded,
       })
     }
     for (const air of w.airUnits) {

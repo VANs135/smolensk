@@ -724,9 +724,10 @@ export function snapshotOf(
    * 仍然排除"已走过的格"和"当前所在格"——不是规则禁止，而是候选集不必把"原地不动"当选项。
    */
   const reachableHexes = moveActive
-    ? (w.groupReachable.hexes as { hex: AiHex }[])
-        .map((node) => node.hex)
-        .filter((hex) => !visitedHexKeys.has(hexKeyOf(hex)) && !currentHexKeys.has(hexKeyOf(hex)))
+    ? (w.groupReachable.hexes as { hex: AiHex; mpSpent: number }[])
+        .filter((node) => !visitedHexKeys.has(hexKeyOf(node.hex)) && !currentHexKeys.has(hexKeyOf(node.hex)))
+        // 带上累计 MP：客户端在绿格上标数字（Web 版「圈内数字＝累计 MP」同口径）
+        .map((node) => ({ col: node.hex.col, row: node.hex.row, mp: node.mpSpent }))
     : []
 
   /*
@@ -1388,11 +1389,26 @@ function execute(
       const unit = w.units.find((item) => item.instanceId === action.unitId)
       const ok = unit !== undefined && unit.fuelled
       w.closeFuelNow()
+      /*
+       * 12.5a 的"未加注不能动"被拒，加完油就该能再点（Web 版就是这么用的）。
+       * 修前被拒的单位永久留在 `movedUnitIds` 里 ⇒ 候选表整段不给它，加油也救不回来。
+       */
+      if (ok) memory.movedUnitIds = memory.movedUnitIds.filter((id) => id !== action.unitId)
       return ok
     }
     case 'moveBegin': {
-      memory.movedUnitIds.push(action.unitId)
-      return w.beginMoveFor([action.unitId])
+      const ok = w.beginMoveFor([action.unitId])
+      /*
+       * 只在**被规则拒**时记账（不是每次开拔都记）
+       *
+       * 修前每次 `moveBegin` 都推进 `movedUnitIds`，而候选表按它过滤 ⇒
+       * ① 玩家"点一下看看可达范围"再收工，这个单位本段的移动机会就没了；
+       * ② 先点被 12.5a 拒、之后加油，同段也再点不动（Web 版里这两种都能继续）。
+       * AI 侧需要记住的只是"这个单位试了也进不去"，所以被拒才记；真走过步的在
+       * `moveClick` 里记（见下），不在这里重复。
+       */
+      if (!ok) memory.movedUnitIds.push(action.unitId)
+      return ok
     }
     case 'moveClick': {
       const stepsBefore = w.moveInteraction?.steps.length ?? 0
@@ -1401,6 +1417,11 @@ function execute(
       const finished = w.moveInteraction?.finished ?? false
       const ok = finished || stepsAfter > stepsBefore
       if (!ok) memory.moveTargets.push(hexKeyOf(action.hex))
+      if (stepsAfter > stepsBefore) {
+        for (const id of w.moveInteraction?.unitIds ?? []) {
+          if (!memory.movedUnitIds.includes(id)) memory.movedUnitIds.push(id)
+        }
+      }
       return ok
     }
     case 'moveFinish':

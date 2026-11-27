@@ -68,7 +68,14 @@ export interface AiMoveSnapshot {
   /** 本次移动已经落过子（一个单位只落一次，落子后直接结束） */
   hasStepped: boolean
   selectedIds: readonly string[]
-  reachableHexes: readonly AiHex[]
+  /**
+   * 可到达格（含**累计 MP**，6.1a 口径）
+   *
+   * `mp` ＝ 从本阶段起点走到该格累计消耗的 MP（引擎 BFS 的原值，展示用；不做换算）。
+   * 客户端据此在绿格上标 MP 数字（Web 版同款，「圈内数字＝累计 MP」）。可选：
+   * 手工构造的快照（测试夹具）可能只给格坐标。
+   */
+  reachableHexes: readonly (AiHex & { mp?: number })[]
   /** 本环节已尝试开拔的单位（稳定序） */
   triedUnits: readonly string[]
   /** 本环节已尝试落子的格 */
