@@ -1,122 +1,40 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { BaseButton } from '@/components/base'
-import { ONLINE_SIDE_LABEL, type OnlineSide } from '@/net/online-types'
 import { useOnlineStore } from '@/stores'
 
-const props = withDefaults(defineProps<{ variant?: 'game' | 'home' | 'create' | 'scenario' }>(), {
+const props = withDefaults(defineProps<{ variant?: 'game' | 'scenario' }>(), {
   variant: 'game',
 })
 
-const emit = defineEmits<{ joined: []; created: [] }>()
-
 const online = useOnlineStore()
-
-const hostSide = ref<OnlineSide>('axis')
-const joinCode = ref('')
-const joinKey = ref('')
-const busy = ref(false)
 const copied = ref(false)
-
-const sideChoices: readonly { side: OnlineSide; label: string }[] = [
-  { side: 'axis', label: ONLINE_SIDE_LABEL.axis },
-  { side: 'soviet', label: ONLINE_SIDE_LABEL.soviet },
-]
 
 const waitingForHost = computed<boolean>(() => online.stage === 'lobby')
 
-function parseInviteText(): void {
-  const raw = joinCode.value.trim()
-  if (!raw.includes('#')) return
-  try {
-    const url = new URL(raw, window.location.href)
-    const params = new URLSearchParams(url.hash.replace(/^#/u, ''))
-    const code = params.get('online')
-    const key = params.get('key')
-    if (code !== null) joinCode.value = code
-    if (key !== null) joinKey.value = key
-  } catch {
-    // 不是合法链接就按原样保留，交给加入时的错误提示
-  }
-}
-
-async function onCreate(): Promise<void> {
-  if (busy.value) return
-  busy.value = true
-  try {
-    if (await online.createRoom(hostSide.value)) emit('created')
-  } finally {
-    busy.value = false
-  }
-}
-
-async function onJoin(): Promise<void> {
-  if (busy.value || joinCode.value.trim() === '' || joinKey.value.trim() === '') return
-  parseInviteText()
-  busy.value = true
-  try {
-    const joined = await online.joinRoom(joinCode.value, joinKey.value)
-    if (joined) emit('joined')
-  } finally {
-    busy.value = false
-  }
-}
-
 async function copyInvite(): Promise<void> {
-  const text = online.inviteUrl
-  if (text === '') return
+  if (online.inviteUrl === '') return
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(online.inviteUrl)
     copied.value = true
     setTimeout(() => {
       copied.value = false
     }, 1800)
   } catch {
-    // 无剪贴板权限时保留只读链接，玩家可手动选中
+    // 无剪贴板权限时保留只读链接，玩家可手动选中。
   }
 }
-
-onMounted(() => {
-  if (props.variant !== 'home') return
-  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ''))
-  const code = params.get('online')
-  const key = params.get('key')
-  if (code !== null) joinCode.value = code
-  if (key !== null) joinKey.value = key
-})
 </script>
 
 <template>
   <div class="online" :class="`online--${props.variant}`">
-    <!-- 加入方：房间已占座 -->
-    <template v-if="online.active && props.variant === 'home'">
+    <!-- 房主/客人：房间信息与邀请 -->
+    <template v-if="online.active">
       <p class="online__room">
-        已加入 <strong class="num">{{ online.roomCode }}</strong>
+        <strong>{{ online.roomName }}</strong>
         <span class="online__dot">·</span>
-        你执 <strong>{{ online.mySideLabel }}</strong>
-      </p>
-      <p class="online__status" role="status">{{ online.statusLabel }}</p>
-      <p v-if="waitingForHost" class="online__hint">
-        房主还在选剧本/进入初设；初设开始后会自动进入棋桌布设本方，不需要重新加入。
-      </p>
-      <p v-else class="online__hint">
-        已进入{{ online.stage === 'setup' ? '初设' : '对局' }}，视角固定为你执的一方。
-      </p>
-      <div class="online__actions">
-        <BaseButton v-if="!waitingForHost" variant="primary" size="sm" @click="emit('joined')">
-          进入{{ online.stage === 'setup' ? '初设' : '棋桌' }}
-        </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="online.leaveRoom()">离开</BaseButton>
-      </div>
-      <p v-if="online.errorLabel" class="online__error">{{ online.errorLabel }}</p>
-      <p v-if="online.notice" class="online__note">{{ online.notice }}</p>
-    </template>
-
-    <!-- 房主/已在房间：房间码与邀请 -->
-    <template v-else-if="online.active">
-      <p class="online__room">
-        房间 <strong class="num">{{ online.roomCode }}</strong>
+        <span class="num">{{ online.roomCode }}</span>
         <span class="online__dot">·</span>
         你执 <strong>{{ online.mySideLabel }}</strong>
         <span class="online__dot">·</span>
@@ -128,7 +46,7 @@ onMounted(() => {
           剧本已选定，进入初设后双方各自布设本方；对方会自动进入棋桌。
         </template>
         <template v-else>
-          房间已建立。请选择剧本；进入初设后双方各自布设本方，不需要你替对方落子。
+          房间已建立。去选剧本并进入初设；双方各自布设本方，不需要你替对方落子。
         </template>
       </p>
       <p v-else-if="waitingForHost" class="online__hint">
@@ -138,9 +56,9 @@ onMounted(() => {
         双方各自布设本方，按先后手自动交棒；只有当前布设方能操作。两方确认后由房主完成初设并开局。
       </p>
       <p v-else class="online__hint">
-        视角已锁定为你执的一方；切换视角入口已收起。对方先提交时，本地未提交的步骤会提示重做。
+        视角已锁定为你执的一方；对方先提交时，本地未提交的步骤会提示重做。
       </p>
-      <label class="online__label" for="online-invite">邀请链接</label>
+      <label class="online__label" for="online-invite">邀请链接（不含密码）</label>
       <input
         id="online-invite"
         class="online__input"
@@ -155,64 +73,13 @@ onMounted(() => {
         <BaseButton variant="secondary" size="sm" @click="online.refreshNow()">立即同步</BaseButton>
         <BaseButton variant="ghost" size="sm" @click="online.leaveRoom()">离开联机</BaseButton>
       </div>
+      <p class="online__note">房间密码不在邀请链接里，请单独发给对手；大厅列表也不会显示密码。</p>
       <p v-if="online.notice" class="online__note">{{ online.notice }}</p>
       <p v-if="online.errorLabel" class="online__error">{{ online.errorLabel }}</p>
-    </template>
-
-    <!-- 开始台：先建房，再去选剧本 -->
-    <template v-else-if="props.variant === 'create'">
-      <p class="online__hint">
-        先建房间，再选剧本。房间固定 PVP；进入初设后双方各自布设本方，对方可先加入等待。
-      </p>
-      <label class="online__label">你执哪一方</label>
-      <div class="online__segmented">
-        <BaseButton
-          v-for="item in sideChoices"
-          :key="item.side"
-          :variant="hostSide === item.side ? 'primary' : 'secondary'"
-          size="sm"
-          @click="hostSide = item.side"
-        >
-          {{ item.label }}
-        </BaseButton>
-      </div>
-      <BaseButton :disabled="busy" variant="primary" size="sm" @click="onCreate">
-        {{ busy ? '创建中…' : '创建房间并选剧本' }}
-      </BaseButton>
-      <p v-if="online.errorLabel" class="online__error">{{ online.errorLabel }}</p>
-    </template>
-
-    <!-- 开始台：加入 -->
-    <template v-else-if="props.variant === 'home'">
-      <p class="online__hint">
-        粘贴房主发来的邀请链接；也可以分别填房间码与房钥。房间还没进入初设时会先占座等待。
-      </p>
-      <label class="online__label" for="online-code">房间码</label>
-      <input
-        id="online-code"
-        v-model="joinCode"
-        class="online__input"
-        autocomplete="off"
-        placeholder="例如 ABC234，或整条邀请链接"
-        @blur="parseInviteText"
-      />
-      <label class="online__label" for="online-key">房钥</label>
-      <input
-        id="online-key"
-        v-model="joinKey"
-        class="online__input"
-        autocomplete="off"
-        placeholder="邀请链接里的 key"
-      />
-      <BaseButton :disabled="busy" variant="primary" size="sm" @click="onJoin">
-        {{ busy ? '加入中…' : '加入房间' }}
-      </BaseButton>
-      <p v-if="online.errorLabel" class="online__error">{{ online.errorLabel }}</p>
-      <p v-if="online.notice" class="online__note">{{ online.notice }}</p>
     </template>
 
     <template v-else>
-      <p class="online__hint">联机房间在开始台创建：先建房，再选剧本。棋桌不再补建房。</p>
+      <p class="online__hint">本局未联机。返回开始台进入联机大厅，设 ID 后建房或加入。</p>
     </template>
   </div>
 </template>
@@ -273,7 +140,6 @@ onMounted(() => {
   font-size: var(--text-xs);
 }
 
-.online__segmented,
 .online__actions {
   display: flex;
   flex-wrap: wrap;

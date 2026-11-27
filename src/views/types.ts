@@ -9,7 +9,7 @@
 import type { Component } from 'vue'
 
 /** 视图名称（新增视图时在此扩展，并在 registry 注册） */
-export type ViewName = 'home' | 'scenario' | 'game' | 'workbench' | 'map'
+export type ViewName = 'home' | 'lobby' | 'scenario' | 'game' | 'workbench' | 'map'
 
 /** 视图路由项 */
 export interface ViewRoute {

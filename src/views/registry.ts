@@ -1,6 +1,7 @@
 import GameTableView from './GameTableView.vue'
 import HomeView from './HomeView.vue'
 import MapView from './MapView.vue'
+import OnlineLobbyView from './OnlineLobbyView.vue'
 import ScenarioSetupView from './ScenarioSetupView.vue'
 import WorkbenchView from './WorkbenchView.vue'
 import type { ViewRegistry } from './types'
@@ -21,6 +22,12 @@ export const viewRegistry: ViewRegistry = {
     path: '/',
     component: HomeView,
     meta: { title: '开始台' },
+  },
+  lobby: {
+    name: 'lobby',
+    path: '/lobby',
+    component: OnlineLobbyView,
+    meta: { title: '联机大厅' },
   },
   // B10：进入游戏前的**剧本 + 共识**（用户口径⑨：先选剧本与共识，再进游戏开始初设）
   scenario: {

@@ -13,6 +13,7 @@ import {
   otherOnlineSide,
   type OnlineLobbyState,
   type OnlineRoomRecord,
+  type OnlineRoomSummary,
   type OnlineSide,
   type OnlineStage,
   type OnlineState,
@@ -24,6 +25,31 @@ import { useMapViewStore } from './map-view'
 import { useSetupStore } from './setup'
 import { useWorkbenchStore } from './workbench'
 import { applyOnlineState, captureOnlineState } from './online-snapshot'
+
+const PLAYER_ID_KEY = 'smolensk-online-player-id'
+const PLAYER_ID_MAX = 16
+
+function randomPlayerSuffix(): string {
+  try {
+    const bytes = new Uint8Array(2)
+    globalThis.crypto.getRandomValues(bytes)
+    return String((bytes[0]! * 256 + bytes[1]!) % 10000).padStart(4, '0')
+  } catch {
+    return String(Date.now() % 10000).padStart(4, '0')
+  }
+}
+
+function loadPlayerId(): string {
+  try {
+    // 用 sessionStorage 而不是 localStorage：同一浏览器开两个标签测试/本机联机时，
+    // 每个标签必须能设成不同的玩家 ID；刷新当前标签仍保留。
+    const stored = globalThis.sessionStorage?.getItem(PLAYER_ID_KEY)?.trim() ?? ''
+    if (stored !== '') return stored.slice(0, PLAYER_ID_MAX)
+  } catch {
+    // 存储不可用时退回临时 ID；建房/加入时仍会要求填写。
+  }
+  return `玩家${randomPlayerSuffix()}`
+}
 
 export type OnlineStatus =
   'idle' | 'creating' | 'joining' | 'waiting' | 'synced' | 'offline' | 'error'
@@ -51,6 +77,10 @@ export const useOnlineStore = defineStore('online', () => {
 
   const { transport, endpoint } = resolveRoomTransport()
 
+  const playerId = ref<string>(loadPlayerId())
+  const rooms = ref<OnlineRoomSummary[]>([])
+  const directoryLoading = ref(false)
+  const directoryError = ref<string | null>(null)
   const room = ref<OnlineRoomRecord | null>(null)
   const mySide = ref<OnlineSide | null>(null)
   const seq = ref(0)
@@ -59,6 +89,10 @@ export const useOnlineStore = defineStore('online', () => {
   const error = ref<string | null>(null)
   const notice = ref<string | null>(null)
   const applyingRemote = ref(false)
+  /**
+   * 离房时要用密码释放座位/关闭房间；只在当前房间生命周期内保留，不持久化、不显示。
+   */
+  const roomPassword = ref<string | null>(null)
   /**
    * 初设交棒后的一次性写权
    *
@@ -78,6 +112,10 @@ export const useOnlineStore = defineStore('online', () => {
 
   const active = computed<boolean>(() => room.value !== null && mySide.value !== null)
   const roomCode = computed<string | null>(() => room.value?.code ?? null)
+  const roomName = computed<string | null>(() => room.value?.name ?? null)
+  const roomGuestId = computed<string | null>(() => room.value?.guestId ?? null)
+  const guestPresent = computed<boolean>(() => room.value?.guestId !== null)
+  const roomPlayerCount = computed<number>(() => room.value?.playerCount ?? 0)
   const roomToken = computed<string | null>(() => room.value?.token ?? null)
   const remote = computed<boolean>(() => transport.kind === 'remote')
   const transportKind = computed<string>(() =>
@@ -163,11 +201,16 @@ export const useOnlineStore = defineStore('online', () => {
 
   const errorLabel = computed<string | null>(() => error.value)
 
-  /** 邀请链接：把房间码与房钥放进 hash；服务端不参与，页面自己解析。 */
+  /**
+   * 邀请链接只带房间码，**不再带房钥**。
+   *
+   * 大厅模式用房名 + 密码找房；把房钥塞进链接会让任何拿到链接的人绕过密码，
+   * 与“密码私下分享”的边界冲突。对方打开链接后仍需输入房主私发的密码。
+   */
   const inviteUrl = computed<string>(() => {
     if (room.value === null || typeof window === 'undefined') return ''
     const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/u, '/')
-    return `${base}#online=${encodeURIComponent(room.value.code)}&key=${encodeURIComponent(room.value.token)}`
+    return `${base}#online=${encodeURIComponent(room.value.code)}`
   })
 
   function fail(cause: unknown, fallback = '联机操作失败'): void {
@@ -178,6 +221,29 @@ export const useOnlineStore = defineStore('online', () => {
 
   function clearError(): void {
     error.value = null
+  }
+
+  function setPlayerId(value: string): void {
+    const next = value.trim().slice(0, PLAYER_ID_MAX)
+    playerId.value = next
+    try {
+      if (next === '') globalThis.sessionStorage?.removeItem(PLAYER_ID_KEY)
+      else globalThis.sessionStorage?.setItem(PLAYER_ID_KEY, next)
+    } catch {
+      // 存储不可用只影响当前标签的预填，不阻止本次对局。
+    }
+  }
+
+  async function refreshDirectory(): Promise<void> {
+    directoryLoading.value = true
+    try {
+      rooms.value = await transport.listRooms()
+      directoryError.value = null
+    } catch (cause) {
+      directoryError.value = cause instanceof Error ? cause.message : '无法获取房间列表'
+    } finally {
+      directoryLoading.value = false
+    }
   }
 
   function schedulePublish(delay = 180): void {
@@ -295,9 +361,20 @@ export const useOnlineStore = defineStore('online', () => {
     try {
       const latest = await transport.readRoom(current.code, current.token)
       if (latest.seq > seq.value) await acceptLatest(latest)
-      else if (status.value === 'offline') {
-        status.value = 'synced'
-        error.value = null
+      else {
+        // 加入/离开只改房间元信息，不推进 seq；房主也要在大厅里看到座位变化。
+        if (
+          latest.guestId !== current.guestId ||
+          latest.name !== current.name ||
+          latest.joinable !== current.joinable ||
+          latest.playerCount !== current.playerCount
+        ) {
+          room.value = latest
+        }
+        if (status.value === 'offline') {
+          status.value = 'synced'
+          error.value = null
+        }
       }
     } catch (cause) {
       if (status.value !== 'error') status.value = 'offline'
@@ -334,16 +411,37 @@ export const useOnlineStore = defineStore('online', () => {
   }
 
   /**
-   * 在开始台建房（用户 2026-11-27：房间改在选剧本前创建）
+   * 在大厅建房
    *
-   * 此时**不复制本机任何盘面/会话**，房间先是 `lobby`；房主随后去选剧本、完成初设，
-   * 开局时再由 watcher 把完整 `game` 状态写进同一间房。这样邀请可以先发出去，
-   * 对方加入后等待房主开局，不会把房主上一局的盘面带进新房间。
+   * 房主先在开始台设置显示 ID、房间名、房间密码与阵营，再选剧本。此时**不复制本机任何
+   * 盘面/会话**，房间先是 `lobby`；房主随后去选剧本、完成初设，开局时再由 watcher 把
+   * 完整 `game` 状态写进同一间房。大厅列表只暴露房名/房主/人数，密码只私下发给对手。
    */
-  async function createRoom(side: OnlineSide): Promise<boolean> {
+  async function createRoom(input: {
+    name: string
+    password: string
+    side: OnlineSide
+    playerId?: string
+  }): Promise<boolean> {
     clearError()
     notice.value = null
     status.value = 'creating'
+    const name = input.name.trim()
+    const password = input.password.trim()
+    const id = (input.playerId ?? playerId.value).trim()
+    if (name === '' || name.length > 24) {
+      fail(new OnlineError('invalidInput', '房间名需为 1–24 个字符'), '创建房间失败')
+      return false
+    }
+    if (password.length < 4 || password.length > 64) {
+      fail(new OnlineError('invalidInput', '房间密码需为 4–64 个字符'), '创建房间失败')
+      return false
+    }
+    if (id === '' || id.length > PLAYER_ID_MAX) {
+      fail(new OnlineError('invalidInput', '请先填写 1–16 个字符的玩家 ID'), '创建房间失败')
+      return false
+    }
+    setPlayerId(id)
     try {
       const state: OnlineLobbyState = {
         stage: 'lobby',
@@ -353,13 +451,17 @@ export const useOnlineStore = defineStore('online', () => {
       }
       const hash = await hashOnlineState(state)
       const record = await transport.createRoom({
+        name,
+        password,
+        hostId: id,
         scenarioId: null,
-        hostSide: side,
+        hostSide: input.side,
         state,
         stateHash: hash,
       })
       room.value = record
-      mySide.value = side
+      mySide.value = input.side
+      roomPassword.value = password
       seq.value = record.seq
       lastHash.value = hash
       pendingSetupWriteSide.value = null
@@ -372,15 +474,33 @@ export const useOnlineStore = defineStore('online', () => {
     }
   }
 
-  async function joinRoom(code: string, token: string): Promise<boolean> {
+  async function joinRoom(input: {
+    code: string
+    password: string
+    playerId?: string
+  }): Promise<boolean> {
     clearError()
     notice.value = null
     status.value = 'joining'
+    const code = input.code.trim().toUpperCase()
+    const password = input.password.trim()
+    const id = (input.playerId ?? playerId.value).trim()
+    if (password === '') {
+      fail(new OnlineError('badPassword', '请输入房间密码'), '加入房间失败')
+      return false
+    }
+    if (id === '') {
+      fail(new OnlineError('invalidInput', '请先填写你的玩家 ID'), '加入房间失败')
+      return false
+    }
+    setPlayerId(id)
     try {
-      const record = await transport.readRoom(code.trim().toUpperCase(), token.trim())
-      const side = otherOnlineSide(record.hostSide)
+      const record = await transport.joinRoom({ code, password, playerId: id })
+      // 房主用同一 ID + 密码重连时仍是房主；其他加入者是客人。
+      const side = record.hostId === id ? record.hostSide : otherOnlineSide(record.hostSide)
       room.value = record
       mySide.value = side
+      roomPassword.value = password
       seq.value = record.seq
       lastHash.value = record.stateHash
       pendingSetupWriteSide.value = null
@@ -425,6 +545,14 @@ export const useOnlineStore = defineStore('online', () => {
   function leaveRoom(): void {
     const beforeGame =
       (stage.value === 'lobby' || stage.value === 'setup') && session.session === null
+    const current = room.value
+    const password = roomPassword.value
+    if (current !== null && password !== null) {
+      // 房主离开 = 关闭房间；客人离开 = 释放座位。失败不阻塞本地退出，TTL 会兜底清理。
+      void transport
+        .leaveRoom({ code: current.code, password, playerId: playerId.value })
+        .catch(() => undefined)
+    }
     if (pollTimer !== null) clearTimeout(pollTimer)
     if (publishTimer !== null) clearTimeout(publishTimer)
     pollTimer = null
@@ -434,6 +562,7 @@ export const useOnlineStore = defineStore('online', () => {
     attached = false
     room.value = null
     mySide.value = null
+    roomPassword.value = null
     seq.value = 0
     lastHash.value = ''
     pendingSetupWriteSide.value = null
@@ -465,10 +594,21 @@ export const useOnlineStore = defineStore('online', () => {
   )
 
   return {
+    // 大厅 / 玩家
+    playerId,
+    setPlayerId,
+    rooms,
+    directoryLoading,
+    directoryError,
+    refreshDirectory,
     // 状态
     room,
     active,
     roomCode,
+    roomName,
+    roomGuestId,
+    guestPresent,
+    roomPlayerCount,
     roomToken,
     mySide,
     mySideLabel,

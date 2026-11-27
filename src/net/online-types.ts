@@ -83,31 +83,62 @@ export type OnlineLiveState = OnlineSetupState | OnlineGameState
 
 export type OnlineState = OnlineLobbyState | OnlineLiveState
 
-/** 房间行；服务端无需理解对局内容。 */
-export interface OnlineRoomRecord {
+/**
+ * 大厅里可见的房间摘要
+ *
+ * 只放公开信息：房间名、房主 ID、已加入的客人 ID、阶段与人数。**房间密码与写房令牌
+ * 不在此列**；密码只在加入时提交并由服务端校验。
+ */
+export interface OnlineRoomSummary {
   code: string
-  /** 房间密钥；邀请链接里携带，服务端只做匹配，不做账号体系 */
-  token: string
-  scenarioId: string | null
+  /** 玩家自设的房间名 */
+  name: string
+  /** 房主自设的显示 ID */
+  hostId: string
+  /** 已加入的客人 ID；未加入为 null */
+  guestId: string | null
   hostSide: OnlineSide
   guestSide: OnlineSide
+  scenarioId: string | null
+  stage: OnlineStage
+  playerCount: number
+  /** 当前是否还能加入（未满且未过期） */
+  joinable: boolean
+  updatedAt: string
+}
+
+/** 房间行；服务端无需理解对局内容。令牌只发给已通过密码校验的客户端。 */
+export interface OnlineRoomRecord extends OnlineRoomSummary {
+  /** 写房令牌；只在创建或加入成功后下发 */
+  token: string
   /** 单调递增；每次成功写房间 +1 */
   seq: number
   /** 最后一次成功写入的阵营（只作诊断/界面显示） */
   writerSide: OnlineSide
-  updatedAt: string
   /** 对 `state` 的稳定哈希，用于跳过无变化的整包 */
   stateHash: string
   state: OnlineState
 }
 
 export interface CreateRoomInput {
+  /** 玩家自设的房间名 */
+  name: string
+  /** 玩家自设的房间密码；服务端只存哈希 */
+  password: string
+  /** 房主显示 ID */
+  hostId: string
   scenarioId: string | null
   hostSide: OnlineSide
   state: OnlineState
   stateHash: string
-  /** 客户端生成；缺省由 transport 生成 */
-  token?: string
+}
+
+export interface JoinRoomInput {
+  code: string
+  /** 房主私下分享的房间密码 */
+  password: string
+  /** 加入者显示 ID */
+  playerId: string
 }
 
 export interface WriteRoomInput {
@@ -134,11 +165,20 @@ export function isOnlineLiveState(state: OnlineState): state is OnlineLiveState 
 }
 
 /** 房间读写抽象；本机双标签与 HTTP 中继共用同一套 store 逻辑。 */
+export interface LeaveRoomInput {
+  code: string
+  password: string
+  playerId: string
+}
+
 export interface RoomTransport {
   readonly kind: 'local' | 'remote'
+  listRooms(): Promise<OnlineRoomSummary[]>
   createRoom(input: CreateRoomInput): Promise<OnlineRoomRecord>
+  joinRoom(input: JoinRoomInput): Promise<OnlineRoomRecord>
   readRoom(code: string, token: string): Promise<OnlineRoomRecord>
   writeRoom(input: WriteRoomInput): Promise<OnlineRoomRecord>
+  leaveRoom(input: LeaveRoomInput): Promise<void>
 }
 
 /** 写冲突：`latest` 是服务端当前行，调用方据此决定重放还是接受。 */
@@ -157,11 +197,15 @@ export class OnlineError extends Error {
   readonly code:
     | 'roomNotFound'
     | 'badToken'
+    | 'badPassword'
+    | 'roomFull'
+    | 'roomNameTaken'
     | 'transportUnavailable'
     | 'protocolMismatch'
     | 'dataVersionMismatch'
     | 'scenarioMismatch'
     | 'emptyState'
+    | 'invalidInput'
 
   constructor(code: OnlineError['code'], message: string) {
     super(message)

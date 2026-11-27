@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { BaseButton, BaseDialog, BaseIcon } from '@/components/base'
-import OnlineRoomPanel from '@/components/online/OnlineRoomPanel.vue'
 import { useGameSessionStore, useOnlineStore, useSetupStore, useUiStore } from '@/stores'
 
 const game = useGameSessionStore()
@@ -10,8 +9,6 @@ const setup = useSetupStore()
 const online = useOnlineStore()
 const ui = useUiStore()
 const confirmNew = ref(false)
-const joinOpen = ref(false)
-const createOpen = ref(false)
 
 const hasCurrent = computed(() => game.session !== null || (setup.applied && !setup.finished))
 
@@ -28,62 +25,22 @@ function onResumeOnline(): void {
     ui.navigate('game')
     return
   }
-  if (online.host) {
-    ui.navigate('scenario')
-    return
-  }
-  joinOpen.value = true
+  ui.navigate('lobby')
 }
 
-function onJoinOpenIfIdle(): void {
-  if (online.active) {
-    onResumeOnline()
-    return
-  }
-  joinOpen.value = true
-}
-
-function onCreateOpen(): void {
-  if (online.active) {
-    onResumeOnline()
-    return
-  }
-  createOpen.value = true
-}
-
-function onJoined(): void {
-  if (!online.active) return
-  joinOpen.value = false
-  if (online.stage === 'game' || online.stage === 'setup') {
-    ui.navigate('game')
-    return
-  }
-  ui.pushToast('info', '已加入房间，等待房主选剧本。')
-}
+onMounted(() => {
+  const hash = window.location.hash.replace(/^#/u, '')
+  if (hash.startsWith('online=')) ui.navigate('lobby')
+})
 
 watch(
   () => online.stage,
   (stage) => {
-    if ((stage === 'setup' || stage === 'game') && online.active && !online.host) onJoined()
+    if ((stage === 'setup' || stage === 'game') && online.active && !online.host) {
+      ui.navigate('game')
+    }
   },
 )
-
-function onCreated(): void {
-  createOpen.value = false
-  // 创建的是新的一局：旧对局/初设必须先清掉，否则已开局的剧本锁定会让选剧本页无法换剧本。
-  if (hasCurrent.value && !setup.restartGameNow()) {
-    online.leaveRoom()
-    ui.pushToast('warning', '无法开始新的联机对局；请先保存或结束当前对局')
-    return
-  }
-  online.reassertShell()
-  ui.navigate('scenario')
-}
-
-onMounted(() => {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ''))
-  if (params.get('online') !== null && params.get('key') !== null) joinOpen.value = true
-})
 
 function onNewGame(): void {
   if (hasCurrent.value) {
@@ -137,29 +94,13 @@ function onRestart(): void {
             >
               新建对局 <BaseIcon name="chevron-right" />
             </button>
-            <button class="home__action" type="button" @click="onCreateOpen">
-              创建联机对局 <BaseIcon name="chevron-right" />
-            </button>
-            <button class="home__action" type="button" @click="onJoinOpenIfIdle">
-              加入联机对局 <BaseIcon name="chevron-right" />
+            <button class="home__action" type="button" @click="ui.navigate('lobby')">
+              联机大厅 <BaseIcon name="chevron-right" />
             </button>
           </template>
         </div>
       </div>
     </section>
-
-    <BaseDialog v-model:open="createOpen" title="创建联机对局">
-      <p v-if="hasCurrent">
-        创建会替换当前对局/初设。需要保留进度时请先保存；房间建好后进入选剧本。
-      </p>
-      <OnlineRoomPanel variant="create" @created="onCreated" />
-    </BaseDialog>
-
-    <BaseDialog v-model:open="joinOpen" title="加入联机对局">
-      <p v-if="online.active">已加入房间，等待房主选剧本/进入初设。</p>
-      <p v-else>加入会替换当前本机对局/初设。需要保留进度时请先保存。</p>
-      <OnlineRoomPanel variant="home" @joined="onJoined" />
-    </BaseDialog>
 
     <BaseDialog v-model:open="confirmNew" title="新建对局">
       <p v-if="game.session !== null">新建会替换当前对局。需要保留进度时请先保存。</p>

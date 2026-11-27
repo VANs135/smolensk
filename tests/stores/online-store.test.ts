@@ -58,11 +58,21 @@ describe('online store local transport', () => {
 
   it('hands setup to each side in cursor order, then lets the host start the game', async () => {
     const host = freshStores()
-    expect(await host.online.createRoom('axis')).toBe(true)
+    expect(
+      await host.online.createRoom({
+        name: '联机测试房',
+        password: 'pass1234',
+        side: 'axis',
+        playerId: '房主',
+      }),
+    ).toBe(true)
     expect(host.online.active).toBe(true)
     expect(host.online.stage).toBe('lobby')
     expect(host.online.mySide).toBe('axis')
+    expect(host.online.roomName).toBe('联机测试房')
     expect(host.online.room?.scenarioId).toBeNull()
+    expect(host.online.room?.hostId).toBe('房主')
+    expect(host.online.room?.guestId).toBeNull()
     expect(host.online.canWrite).toBe(true)
     // 联机外壳从建房起就锁本人阵营：初设也不能切到对方视角替其落子。
     host.online.reassertShell()
@@ -90,10 +100,17 @@ describe('online store local transport', () => {
 
     // 客人加入就能拿到完整初设现场，并可直接操作本方苏联。
     const guest = freshStores()
-    expect(await guest.online.joinRoom(code!, token!)).toBe(true)
+    expect(
+      await guest.online.joinRoom({
+        code: code!,
+        password: 'pass1234',
+        playerId: '客人',
+      }),
+    ).toBe(true)
     expect(guest.online.active).toBe(true)
     expect(guest.online.stage).toBe('setup')
     expect(guest.online.mySide).toBe('soviet')
+    expect(guest.online.roomGuestId).toBe('客人')
     expect(guest.online.canWrite).toBe(true)
     expect(guest.session.session).toBeNull()
     expect(guest.setup.applied).toBe(true)
@@ -101,6 +118,10 @@ describe('online store local transport', () => {
     expect(guest.hotseat.viewerSide).toBe('soviet')
     expect(guest.hotseat.viewerLockedTo).toBe('soviet')
     expect(guest.hotseat.setViewerSide('axis')).toBe(false)
+
+    await host.online.refreshNow()
+    expect(host.online.roomGuestId).toBe('客人')
+    expect(host.online.guestPresent).toBe(true)
 
     // 客人确认苏联布设 → 交棒给轴心房主；最后一包“苏联已完成”必须写进房间。
     guest.setup.$patch({

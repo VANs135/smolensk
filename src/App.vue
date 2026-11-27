@@ -68,9 +68,15 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
       class="shell__body"
       :class="{
         'shell__body--wide':
-          currentView === 'game' || currentView === 'workbench' || currentView === 'map',
+          currentView === 'game' ||
+          currentView === 'workbench' ||
+          currentView === 'map' ||
+          currentView === 'lobby',
         'shell__body--full':
-          currentView === 'game' || currentView === 'home' || currentView === 'scenario',
+          currentView === 'game' ||
+          currentView === 'home' ||
+          currentView === 'scenario' ||
+          currentView === 'lobby',
       }"
     >
       <component :is="activeRoute.component" />
