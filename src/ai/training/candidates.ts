@@ -177,6 +177,14 @@ export function candidateActionsOf(
     }
     for (const hex of snapshot.move.reachableHexes) add({ kind: 'moveClick', hex })
     if (snapshot.branch.gauge !== null) add({ kind: 'gaugeConvert', ...snapshot.branch.gauge })
+    /*
+     * 6.1 回退：走过至少一步才给（没步可退是空转）。顺序与 web 面板一致：先「撤销一步」再「取消整次移动」，
+     * 两者都在 `moveFinish` 之前 —— 退回去再另走，是这里的正常意图。
+     */
+    if (snapshot.move.hasStepped) {
+      add({ kind: 'moveUndo' })
+      add({ kind: 'moveCancel' })
+    }
     add({ kind: 'moveFinish' })
   } else {
     for (const unitId of snapshot.reserveUnitIds) {

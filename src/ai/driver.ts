@@ -1492,6 +1492,22 @@ function execute(
     case 'moveFinish':
       w.finishMove()
       return true
+    /*
+     * 6.1：两个回退动作的返回值就是 store 的判决（`refuseRollback` / 封盘 / 8.1a 突袭未收束都在里面），
+     * 这里不另判一遍 —— 拒绝原因由 store 写进 moveBlocked + 日志，客户端照 `info.reason` 透传。
+     */
+    case 'moveUndo':
+      return w.undoLastStep()
+    case 'moveCancel': {
+      /*
+       * store 的 `cancelWholeMove()` 只回 void（封盘 / 8.1a 突袭未收束这类拒绝由它自己写
+       * `moveBlocked` + 日志，理由由 `runAiStep` 从日志栈顶取）⇒ 这里用「整次移动是否真被收掉」判成败，
+       * 不能靠返回值（那会恒 true，把被拒的动作报成 OK）。
+       */
+      const before = w.moveInteraction
+      w.cancelWholeMove()
+      return before !== null && (w.moveInteraction === null || w.moveInteraction.steps.length === 0)
+    }
     /* ────────── 批 2：C 段支线 ────────── */
     case 'modeChangeTo': {
       memory.modeSwitchTried.push(action.unitId)

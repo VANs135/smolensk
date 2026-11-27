@@ -429,6 +429,14 @@ export type AiAction =
   | { kind: 'moveBegin'; unitId: string }
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
+  /*
+   * 6.1 族内回退（web 面板按钮与 Backspace/Esc 同一条路）：
+   * `moveUndo`＝撤销上一步（C5），`moveCancel`＝取消整次移动（回到开拔前）。
+   * 两者都只是调 store 的 `undoLastStep()` / `cancelWholeMove()`，
+   * 封盘（`moveUndoSealReasonNow`）与突袭未收束（8.1a）的拒绝原样返回，客户端照透传。
+   */
+  | { kind: 'moveUndo' }
+  | { kind: 'moveCancel' }
   /* 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
   | { kind: 'modeChangeTo'; unitId: string; mode: 'move' | 'combat' }
   /** 12.11a：尝试销毁一座己方补给站的全部 SP（骰面由引擎当场掷） */
@@ -615,6 +623,8 @@ export const AI_ACTION_KINDS = [
   'moveBegin',
   'moveClick',
   'moveFinish',
+  'moveUndo',
+  'moveCancel',
   'modeChangeTo',
   'dumpBlow',
   'overrun',

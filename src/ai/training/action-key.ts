@@ -75,6 +75,10 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
       return `moveClick:${hexOf(action.hex)}`
     case 'moveFinish':
       return 'moveFinish'
+    case 'moveUndo':
+      return 'moveUndo'
+    case 'moveCancel':
+      return 'moveCancel'
     case 'modeChangeTo':
       return `modeChangeTo:${keyOf(ids.unit, action.unitId)}:${action.mode}`
     case 'dumpBlow':
