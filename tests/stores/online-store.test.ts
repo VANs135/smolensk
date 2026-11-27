@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { useGameSessionStore, useHotseatStore, useOnlineStore, useWorkbenchStore } from '@/stores'
+import {
+  useGameSessionStore,
+  useHotseatStore,
+  useOnlineStore,
+  useSetupStore,
+  useWorkbenchStore,
+} from '@/stores'
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>()
@@ -31,16 +37,15 @@ class MemoryStorage implements Storage {
   }
 }
 
-function bootGame() {
-  const pinia = createPinia()
-  setActivePinia(pinia)
-  const session = useGameSessionStore()
-  const workbench = useWorkbenchStore()
-  const hotseat = useHotseatStore()
-  const online = useOnlineStore()
-  expect(session.startGame(workbench.seed)).toBe(true)
-  hotseat.setMode('pvp')
-  return { session, workbench, hotseat, online }
+function freshStores() {
+  setActivePinia(createPinia())
+  return {
+    session: useGameSessionStore(),
+    workbench: useWorkbenchStore(),
+    setup: useSetupStore(),
+    hotseat: useHotseatStore(),
+    online: useOnlineStore(),
+  }
 }
 
 describe('online store local transport', () => {
@@ -51,30 +56,54 @@ describe('online store local transport', () => {
     })
   })
 
-  it('host creates a room and guest joins with the opposite fixed side', async () => {
-    const host = bootGame()
-    // 联机房间必须收成 PVP 外壳：即使主机从 solo 局面开房，也不能把双面可见状态复制给对方。
-    host.hotseat.setMode('solo')
+  it('opens a room before scenario selection and only replaces the guest when the host starts', async () => {
+    const host = freshStores()
     expect(await host.online.createRoom('axis')).toBe(true)
     expect(host.online.active).toBe(true)
+    expect(host.online.stage).toBe('lobby')
     expect(host.online.mySide).toBe('axis')
+    expect(host.online.room?.scenarioId).toBeNull()
+    expect(host.online.canWrite).toBe(true)
+    // 开始台建房本身不碰盘面；lobby 初设由房主独自布两方，先不锁视角。
+    host.online.reassertShell()
     expect(host.hotseat.viewerSide).toBe('axis')
-    expect(host.hotseat.viewerLockedTo).toBe('axis')
-    expect(host.online.room?.state.hotseat.mode).toBe('pvp')
+    expect(host.hotseat.viewerLockedTo).toBeNull()
+    // 初设游标换到苏联，房主视角跟着走，否则执轴心时会被“等苏联布设”卡死。
+    host.setup.$patch({ setupSideCursor: 'soviet' })
+    expect(host.hotseat.viewerSide).toBe('soviet')
     const code = host.online.roomCode
     const token = host.online.roomToken
     expect(code).not.toBeNull()
     expect(token).not.toBeNull()
 
-    const guest = bootGame()
-    guest.hotseat.setMode('solo')
+    const guest = freshStores()
     expect(await guest.online.joinRoom(code!, token!)).toBe(true)
     expect(guest.online.active).toBe(true)
+    expect(guest.online.stage).toBe('lobby')
     expect(guest.online.mySide).toBe('soviet')
-    expect(guest.hotseat.viewerSide).toBe('soviet')
-    expect(guest.hotseat.viewerLockedTo).toBe('soviet')
+    expect(guest.online.canWrite).toBe(false)
+    // lobby 阶段只占座等待，不替换客人本机盘面。
+    expect(guest.session.session).toBeNull()
+    expect(guest.hotseat.viewerLockedTo).toBeNull()
+
+    // 房主选完剧本、完成初设并开局后，同一房间转为完整 PVP 状态。
+    expect(host.session.startGame(host.workbench.seed)).toBe(true)
+    host.setup.$patch({ finished: true })
+    host.workbench.activeSide = 'axis'
+    await host.online.publishNow()
+    expect(host.online.stage).toBe('game')
+    expect(host.hotseat.viewerLockedTo).toBe('axis')
+    const hostState = host.online.room?.state
+    if (hostState?.stage !== 'game') throw new Error('expected game state')
+    expect(hostState.hotseat.mode).toBe('pvp')
+
+    await guest.online.refreshNow()
+    expect(guest.online.stage).toBe('game')
+    expect(guest.session.session).not.toBeNull()
     expect(guest.hotseat.mode).toBe('pvp')
     expect(guest.hotseat.fogDisabled).toBe(false)
+    expect(guest.hotseat.viewerSide).toBe('soviet')
+    expect(guest.hotseat.viewerLockedTo).toBe('soviet')
     expect(guest.online.canWrite).toBe(false)
     expect(guest.session.session?.state.scenarioId).toBe(host.session.session?.state.scenarioId)
     expect(guest.hotseat.setViewerSide('axis')).toBe(false)

@@ -45,9 +45,14 @@ function parseRecord(raw: string): OnlineRoomRecord {
     typeof parsed.seq !== 'number' ||
     typeof parsed.stateHash !== 'string' ||
     typeof parsed.state !== 'object' ||
-    parsed.state === null
+    parsed.state === null ||
+    (parsed.scenarioId !== null && typeof parsed.scenarioId !== 'string')
   ) {
     throw new OnlineError('transportUnavailable', '本机房间记录损坏')
+  }
+  const stage = (parsed.state as { stage?: unknown }).stage
+  if (stage !== 'lobby' && stage !== 'game') {
+    throw new OnlineError('transportUnavailable', '本机房间协议版本过旧，请重新建房')
   }
   return parsed as OnlineRoomRecord
 }
@@ -103,6 +108,7 @@ export class LocalRoomTransport implements RoomTransport {
     if (current.seq !== input.expectedSeq) throw new RoomConflictError(current)
     const next: OnlineRoomRecord = {
       ...current,
+      scenarioId: input.state.scenarioId,
       seq: current.seq + 1,
       writerSide: input.writerSide,
       updatedAt: new Date().toISOString(),
@@ -153,6 +159,7 @@ export class MemoryRoomTransport implements RoomTransport {
     if (current.seq !== input.expectedSeq) throw new RoomConflictError(current)
     const next: OnlineRoomRecord = {
       ...current,
+      scenarioId: input.state.scenarioId,
       seq: current.seq + 1,
       writerSide: input.writerSide,
       updatedAt: new Date().toISOString(),

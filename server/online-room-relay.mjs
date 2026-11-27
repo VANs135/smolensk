@@ -102,15 +102,28 @@ function validSide(side) {
 }
 
 function validState(state) {
+  if (
+    typeof state !== 'object' ||
+    state === null ||
+    typeof state.protocol !== 'number' ||
+    typeof state.dataVersion !== 'string'
+  ) {
+    return false
+  }
+  if (state.stage === 'lobby') {
+    return state.scenarioId === null || typeof state.scenarioId === 'string'
+  }
+  if (state.stage !== 'game') return false
   return (
-    typeof state === 'object' &&
-    state !== null &&
-    typeof state.protocol === 'number' &&
-    typeof state.dataVersion === 'string' &&
     typeof state.scenarioId === 'string' &&
     typeof state.session === 'object' &&
+    state.session !== null &&
     typeof state.workbench === 'object' &&
-    typeof state.setup === 'object'
+    state.workbench !== null &&
+    typeof state.setup === 'object' &&
+    state.setup !== null &&
+    typeof state.hotseat === 'object' &&
+    state.hotseat !== null
   )
 }
 
@@ -152,7 +165,10 @@ const server = http.createServer(async (request, response) => {
         fail(response, 400, 'invalidRoomInput')
         return
       }
-      if (body.state.scenarioId !== body.scenarioId) {
+      if (
+        (body.scenarioId !== null && typeof body.scenarioId !== 'string') ||
+        body.state.scenarioId !== body.scenarioId
+      ) {
         fail(response, 400, 'scenarioMismatch')
         return
       }
@@ -210,13 +226,18 @@ const server = http.createServer(async (request, response) => {
         fail(response, 400, 'invalidRoomInput')
         return
       }
-      if (body.state.scenarioId !== room.scenarioId) {
-        fail(response, 400, 'scenarioMismatch')
-        return
+      // 房间一旦有完整对局，不允许退回 lobby，也不允许换剧本；
+      // lobby 阶段则允许房主从“未选剧本”切到已选剧本，随后转 game。
+      if (room.state?.stage === 'game') {
+        if (body.state.stage !== 'game' || body.state.scenarioId !== room.scenarioId) {
+          fail(response, 400, 'scenarioMismatch')
+          return
+        }
       }
       const next = {
         ...room,
         seq: room.seq + 1,
+        scenarioId: body.state.scenarioId,
         writerSide: body.writerSide,
         updatedAt: new Date().toISOString(),
         stateHash: body.stateHash,

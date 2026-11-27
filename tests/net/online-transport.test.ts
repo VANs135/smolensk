@@ -6,10 +6,12 @@ import {
   ONLINE_PROTOCOL_VERSION,
   RoomConflictError,
   type OnlineGameState,
+  type OnlineLobbyState,
 } from '@/net/online-types'
 
 function sampleState(scenarioId = '1'): OnlineGameState {
   return {
+    stage: 'game',
     protocol: ONLINE_PROTOCOL_VERSION,
     dataVersion: 'test',
     scenarioId,
@@ -67,6 +69,49 @@ describe('room transport CAS', () => {
     const latest = await transport.readRoom(room.code, token)
     expect(latest.seq).toBe(2)
     expect(latest.stateHash).toBe(secondHash)
+  })
+
+  it('accepts a lobby room created before a scenario and later replaces it with the game', async () => {
+    const transport = new MemoryRoomTransport()
+    const lobby: OnlineLobbyState = {
+      stage: 'lobby',
+      protocol: ONLINE_PROTOCOL_VERSION,
+      dataVersion: 'test',
+      scenarioId: null,
+    }
+    const room = await transport.createRoom({
+      scenarioId: null,
+      hostSide: 'axis',
+      state: lobby,
+      stateHash: await hashOnlineState(lobby),
+      token: 'lobby-token',
+    })
+    expect(room.state.stage).toBe('lobby')
+    expect(room.scenarioId).toBeNull()
+
+    const namedLobby: OnlineLobbyState = { ...lobby, scenarioId: '3' }
+    const named = await transport.writeRoom({
+      code: room.code,
+      token: 'lobby-token',
+      expectedSeq: room.seq,
+      state: namedLobby,
+      stateHash: await hashOnlineState(namedLobby),
+      writerSide: 'axis',
+    })
+    expect(named.scenarioId).toBe('3')
+    expect(named.state.stage).toBe('lobby')
+
+    const game = sampleState('3')
+    const started = await transport.writeRoom({
+      code: room.code,
+      token: 'lobby-token',
+      expectedSeq: named.seq,
+      state: game,
+      stateHash: await hashOnlineState(game),
+      writerSide: 'axis',
+    })
+    expect(started.scenarioId).toBe('3')
+    expect(started.state.stage).toBe('game')
   })
 
   it('rejects a wrong room key', async () => {

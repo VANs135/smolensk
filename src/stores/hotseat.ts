@@ -565,17 +565,22 @@ export const useHotseatStore = defineStore('hotseat', () => {
    *
    * 用户 2026-11-27 口径：不做服务端反作弊，只保证双方 UI/视角/操作权限隔离。
    *   · `mode` 固定为 `pvp`（不是 PVE，避免 AI 接管）；
-   *   · `setupLocked` 固定为 true（联机从已开始的局面进入，不允许再改模式）；
-   *   · `viewerSide` 固定为本人阵营，之后任何切视角入口都只读。
+   *   · `setupLocked` 固定为 true（联机不允许再改模式）；
+   *   · 对局阶段把 `viewerSide` 固定为本人阵营，之后任何切视角入口都只读。
+   *
+   * `lockViewer: false` 只给“房主独自完成双方初设”的 lobby 阶段用：外壳照收，
+   * 但视角必须留给布设游标（否则房主执轴心时会被卡在“等苏联布设”而无人能布）。
+   * 初设一结束，`online` 的 watcher 会重新锁回本人阵营。
    *
    * 它只改对局组织方式，不碰 `activeSide` / 盘面 / 记录轨；规则判定仍全在引擎。
    */
-  function adoptOnlineShell(side: Side): void {
+  function adoptOnlineShell(side: Side, options: { lockViewer?: boolean } = {}): void {
     mode.value = 'pvp'
     aiSide.value = null
     setupLocked.value = true
     scriptedSide.value = null
-    lockViewer(side)
+    if (options.lockViewer === false) unlockViewer()
+    else lockViewer(side)
   }
 
   /*

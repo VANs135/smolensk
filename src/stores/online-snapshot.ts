@@ -8,6 +8,8 @@ import {
   OnlineError,
   ONLINE_PROTOCOL_VERSION,
   type OnlineGameState,
+  type OnlineLobbyState,
+  type OnlineState,
   type OnlineSide,
 } from '@/net/online-types'
 
@@ -101,20 +103,31 @@ function withoutKeys(
 }
 
 /**
- * 捕获一份可跨设备复制的对局状态
+ * 捕获一份可跨设备复制的房间状态
+ *
+ * 选剧本前只有 `lobby`：不复制本机旧盘面，只带协议/数据版本与已选剧本。
+ * 房主完成初设并开局后转为 `game`，才做完整状态复制。
  *
  * 这是**全量状态复制**，不是存档协议：它故意包含战斗现场和各类交互进行态，否则守方
  * 无法在自己的设备上选择地形/AR/损失/撤退。代价是双方必须使用同一构建与同一
  * `DATA_VERSION`；不承诺跨版本回放。
  */
-export function captureOnlineState(stores: OnlineStoreBundle): OnlineGameState {
+export function captureOnlineState(stores: OnlineStoreBundle): OnlineState {
   if (stores.session.session === null) {
-    throw new OnlineError('emptyState', '当前没有可联机的对局，请先开始一局')
+    const lobby: OnlineLobbyState = {
+      stage: 'lobby',
+      protocol: ONLINE_PROTOCOL_VERSION,
+      dataVersion: DATA_VERSION,
+      // 只有真正进入初设后才把剧本写进房间；开始台的默认剧本号不算“已选”
+      scenarioId: stores.setup.applied ? stores.session.scenarioId : null,
+    }
+    return lobby
   }
   const sessionState = withoutKeys(cloneWire(stores.session.$state), SESSION_LOCAL_KEYS)
   const workbenchState = withoutKeys(cloneWire(stores.workbench.$state), WORKBENCH_LOCAL_KEYS)
   const setupState = withoutKeys(cloneWire(stores.setup.$state), SETUP_LOCAL_KEYS)
   return {
+    stage: 'game',
     protocol: ONLINE_PROTOCOL_VERSION,
     dataVersion: DATA_VERSION,
     scenarioId: stores.session.scenarioId,

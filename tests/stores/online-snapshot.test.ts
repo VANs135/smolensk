@@ -16,6 +16,14 @@ function hostStores() {
 }
 
 describe('online state replication', () => {
+  it('captures a lobby before a scenario is entered, without touching any local board', () => {
+    const stores = hostStores()
+    const state = captureOnlineState(stores)
+    expect(state.stage).toBe('lobby')
+    expect(state.protocol).toBe(2)
+    expect(state.scenarioId).toBeNull()
+  })
+
   it('captures a complete state and applies it to a second store set', () => {
     const host = hostStores()
     expect(host.session.startGame(host.workbench.seed)).toBe(true)
@@ -23,7 +31,8 @@ describe('online state replication', () => {
     host.hotseat.setMode('solo')
 
     const state = captureOnlineState(host)
-    expect(state.protocol).toBe(1)
+    if (state.stage !== 'game') throw new Error('expected a game state')
+    expect(state.protocol).toBe(2)
     expect(state.hotseat.mode).toBe('pvp')
     expect(state.hotseat.aiSide).toBeNull()
     expect(state.scenarioId).toBe(host.session.scenarioId)
@@ -70,6 +79,7 @@ describe('online state replication', () => {
     expect(second).toBe(first)
 
     const changed = captureOnlineState(stores)
+    if (changed.stage !== 'game') throw new Error('expected a game state')
     changed.workbench.activeSide = 'soviet'
     expect(await hashOnlineState(changed)).not.toBe(first)
   })
