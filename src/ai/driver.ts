@@ -1990,6 +1990,16 @@ function execute(
     }
     case 'contextAct':
       return useMapViewStore().openContextAction(action.targetId, action.key)
+    /*
+     * 左键（与上面右键菜单分开）：web 左键点设施＝选中它并开它的动作会话（`openUnitActionAt`），
+     * 会话内容随后由 `state.panel`（`mapView.session`）给出，客户端只渲染。
+     */
+    case 'unitOpen': {
+      const mv = useMapViewStore()
+      const unit = w.units.find((item) => item.instanceId === action.unitId)
+      if (unit === undefined) return false
+      return mv.openUnitActionAt({ col: unit.hex.col, row: unit.hex.row }, action.unitId)
+    }
     case 'contextClose':
       useMapViewStore().closePopup()
       return true

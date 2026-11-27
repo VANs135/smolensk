@@ -205,7 +205,10 @@ export function contextMenuCandidates(
     out.push({ kind: 'contextClose' })
     return out
   }
-  return (facilities ?? []).map((facility) => ({ kind: 'contextOpen', unitId: facility.unitId }))
+  return (facilities ?? []).flatMap((facility) => [
+    { kind: 'unitOpen' as const, unitId: facility.unitId },
+    { kind: 'contextOpen' as const, unitId: facility.unitId },
+  ])
 }
 
 export function candidateActionsOf(

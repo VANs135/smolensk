@@ -40,10 +40,17 @@ function menu(
 }
 
 describe('F 阶段右键菜单候选', () => {
-  it('菜单没开 ⇒ 只列可点的设施（contextOpen）', () => {
+  it('菜单没开 ⇒ 每枚可点设施给两条通道：左键开会话 + 右键弹菜单', () => {
     expect(contextMenuCandidates(null, [{ unitId: 'f1', label: 'Ge 10.Pz Truck', hex }])).toEqual([
+      { kind: 'unitOpen', unitId: 'f1' },
       { kind: 'contextOpen', unitId: 'f1' },
     ])
+  })
+
+  it('两套通道分开：左键那条不产生菜单，右键那条不产会话', () => {
+    const out = contextMenuCandidates(null, [{ unitId: 'f1', label: 'Ge 10.Pz Truck', hex }])
+    expect(out.filter((action) => action.kind === 'unitOpen')).toHaveLength(1)
+    expect(out.filter((action) => action.kind === 'contextOpen')).toHaveLength(1)
   })
 
   it('菜单开着 ⇒ 列可用项 + 收起；禁用项不出现（不置灰）', () => {

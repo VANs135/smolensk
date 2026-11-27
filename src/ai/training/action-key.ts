@@ -100,6 +100,8 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
     /* F 阶段：右键菜单三步（菜单项 key 原样带上，分隔符只用于可读性） */
     case 'contextOpen':
       return `contextOpen:${keyOf(ids.unit, action.unitId)}`
+    case 'unitOpen':
+      return `unitOpen:${keyOf(ids.unit, action.unitId)}`
     case 'contextAct':
       return `contextAct:${keyOf(ids.unit, action.targetId)}:${action.key}`
     case 'contextClose':

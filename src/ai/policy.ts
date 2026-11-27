@@ -503,6 +503,11 @@ export type AiAction =
    * 菜单项清单与可执行性全部由 store 给（`counterActionsAt` / `applyContextAction`），训练侧不另判。
    */
   | { kind: 'contextOpen'; unitId: string }
+  /**
+   * 左键的语义（与右键菜单分开）：web 左键点设施＝**选中它并开它的动作会话**
+   * （`mapView.openUnitActionAt`，会话内容由 `state.panel` 给）；右键才是菜单（`contextOpen`）。
+   */
+  | { kind: 'unitOpen'; unitId: string }
   | { kind: 'contextAct'; targetId: string; key: string }
   | { kind: 'contextClose' }
   | { kind: 'specialConfirm' }
@@ -704,6 +709,7 @@ export const AI_ACTION_KINDS = [
   'constructionMarker',
   'gaugeConvert',
   'contextOpen',
+  'unitOpen',
   'contextAct',
   'contextClose',
   'specialConfirm',
