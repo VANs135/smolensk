@@ -45,6 +45,7 @@ import {
   type AiSide,
 } from './policy'
 import { aiProfileOf, type AiProfile } from './scenario-posture'
+import { projectPanel } from './training/panel-steps'
 import type { AiStepRecord } from './trace'
 
 export interface AiContext {
@@ -1045,6 +1046,11 @@ export function snapshotOf(
         })),
     },
 
+    /*
+     * 会话框「这一步要办什么」：文字与顺序**直接复用 web 版** `planSessionSteps`（`panel-steps.ts`），
+     * 客户端只渲染、不造句。改 web 文案即等于改客户端文案，避免两份真相漂移。
+     */
+    panel: projectPanel(w),
 
     control: {
       // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值

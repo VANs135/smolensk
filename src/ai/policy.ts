@@ -339,6 +339,24 @@ export interface AiSnapshot {
   }
   /** B4：控制权（见 `AiControlSnapshot`） */
   control: AiControlSnapshot
+  /**
+   * 会话框「这一步要办什么」（文字与顺序复用 web 版 `planSessionSteps`）
+   *
+   * 桥接端只渲染：`kind` 是当前活着的会话种类，`step` 是 web 一次只暴露的那一件（含
+   * `title / why / decision`），`steps` 是整张待决清单（客户端可显示「2/6」）。
+   * 可选：老夹具 / 非桥接调用方不传也不报错。
+   */
+  panel?: {
+    kind: 'combat' | 'barrage' | 'supply' | 'move' | null
+    step: { id: string; title: string; why: string; decision: string; optional: boolean } | null
+    steps: readonly {
+      id: string
+      title: string
+      why: string
+      decision: string
+      optional: boolean
+    }[]
+  }
   setupInProgress: boolean
   /** 会话停在回合准备（天气 / 先手判定，2.2 / 2.3）——此时只能推进，不能按旧环节行动 */
   locked: boolean
