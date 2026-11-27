@@ -724,10 +724,18 @@ export function snapshotOf(
    * 仍然排除"已走过的格"和"当前所在格"——不是规则禁止，而是候选集不必把"原地不动"当选项。
    */
   const reachableHexes = moveActive
-    ? (w.groupReachable.hexes as { hex: AiHex; mpSpent: number }[])
+    ? (w.groupReachable.hexes as { hex: AiHex; mpSpent: number; path?: AiHex[] }[])
         .filter((node) => !visitedHexKeys.has(hexKeyOf(node.hex)) && !currentHexKeys.has(hexKeyOf(node.hex)))
         // 带上累计 MP：客户端在绿格上标数字（Web 版「圈内数字＝累计 MP」同口径）
-        .map((node) => ({ col: node.hex.col, row: node.hex.row, mp: node.mpSpent }))
+        // 带上引擎自己算的推荐路径：客户端悬停画路线（Web 版 dragPath 同口径），**不在地图端重算路径**
+        .map((node) => ({
+          col: node.hex.col,
+          row: node.hex.row,
+          mp: node.mpSpent,
+          path: Array.isArray(node.path)
+            ? node.path.map((step) => ({ col: step.col, row: step.row }))
+            : undefined,
+        }))
     : []
 
   /*

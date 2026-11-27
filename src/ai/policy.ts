@@ -75,7 +75,7 @@ export interface AiMoveSnapshot {
    * 客户端据此在绿格上标 MP 数字（Web 版同款，「圈内数字＝累计 MP」）。可选：
    * 手工构造的快照（测试夹具）可能只给格坐标。
    */
-  reachableHexes: readonly (AiHex & { mp?: number })[]
+  reachableHexes: readonly (AiHex & { mp?: number; path?: readonly AiHex[] })[]
   /** 本环节已尝试开拔的单位（稳定序） */
   triedUnits: readonly string[]
   /** 本环节已尝试落子的格 */
