@@ -300,7 +300,11 @@ export function resolveInitiative(rng: RngState, input: ResolveInitiativeInput):
  * 选项 id 与 `Initiative` 取值一致（'first' / 'second'），作答后经 applyInitiativeChoice 落地。
  * `payload.chooser` 供作答落地时还原「谁在选择」（见 session-flow 的 applyAnswerToRecords）。
  */
-export function initiativeQuestion(chooser: Side): SessionQuestion {
+export function initiativeQuestion(
+  chooser: Side,
+  rolls?: InitiativeRolls,
+  rerolls = 0,
+): SessionQuestion {
   return {
     id: 'initiative',
     responder: chooser,
@@ -311,7 +315,19 @@ export function initiativeQuestion(chooser: Side): SessionQuestion {
       { id: 'first', label: '先手（本方先行动）' },
       { id: 'second', label: '后手（对手先行动）' },
     ],
-    payload: { chooser },
+    payload: {
+      chooser,
+      // 2.3 的确认窗：把双方 2d6 的骰面/点数与重掷次数带到界面，不只写一句“某方胜出”。
+      ...(rolls === undefined
+        ? {}
+        : {
+            axisRoll: rolls.axis.total,
+            sovietRoll: rolls.soviet.total,
+            axisFaces: rolls.axis.faces,
+            sovietFaces: rolls.soviet.faces,
+            rerolls,
+          }),
+    },
   }
 }
 

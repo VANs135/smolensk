@@ -599,7 +599,14 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
       const withRng: GameSession = { ...rolled, state: { ...rolled.state, rng: draw.rng } }
       return {
         kind: 'question',
-        session: askQuestion(withRng, initiativeQuestion(draw.resolution.chooser)),
+        session: askQuestion(
+          withRng,
+          initiativeQuestion(
+            draw.resolution.chooser,
+            draw.resolution.rolls,
+            draw.resolution.rerolls,
+          ),
+        ),
       }
     }
 

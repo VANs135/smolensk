@@ -34,6 +34,39 @@ const canAnswer = computed<boolean>(
 /** 选项列表（无选项 ⇒ 空数组，按确认题处理） */
 const options = computed(() => question.value?.options ?? [])
 
+/**
+ * 2.3 先手判定的骰点确认窗
+ *
+ * 题面只写“某方胜出”不够：双方需要看到各自 2d6 与重掷次数，才能按规则确认胜者。
+ * 骰点由引擎在 `initiativeQuestion` 的 payload 里带来，组件不自行掷骰或推断胜者。
+ */
+const initiativeRolls = computed<{
+  axis: number
+  soviet: number
+  axisFaces: readonly number[]
+  sovietFaces: readonly number[]
+  rerolls: number
+} | null>(() => {
+  const current = question.value
+  if (current?.id !== 'initiative') return null
+  const axis = current.payload?.['axisRoll']
+  const soviet = current.payload?.['sovietRoll']
+  if (typeof axis !== 'number' || typeof soviet !== 'number') return null
+  const rerolls = current.payload?.['rerolls']
+  const axisFaces = current.payload?.['axisFaces']
+  const sovietFaces = current.payload?.['sovietFaces']
+  return {
+    axis,
+    soviet,
+    axisFaces: Array.isArray(axisFaces) ? axisFaces.filter((n) => typeof n === 'number') : [],
+    sovietFaces: Array.isArray(sovietFaces) ? sovietFaces.filter((n) => typeof n === 'number') : [],
+    rerolls: typeof rerolls === 'number' ? rerolls : 0,
+  }
+})
+
+/** 当前回合号（只作标题，不参与判定） */
+const turnNumber = computed<number | null>(() => gameSession.records?.turn ?? null)
+
 /** 作答（选项 id；确认题传 undefined）
  *
  * 2.3 先手判定（用户 2026-11-14 裁定）：**作答即自动推进到 A 段**，不再要求多点心一次
@@ -56,6 +89,40 @@ function answer(optionId?: string): void {
         </header>
 
         <div class="prompt__body">
+          <div v-if="initiativeRolls !== null" class="prompt__rolls" aria-label="先手判定骰点">
+            <p class="prompt__rolls-title">第 {{ turnNumber ?? '—' }} 回合 · 先手判定（2.3）</p>
+            <div class="prompt__roll-row" data-side="axis">
+              <span class="prompt__roll-side">轴心</span>
+              <span class="prompt__roll-dice num">
+                {{
+                  initiativeRolls.axisFaces.length > 0
+                    ? initiativeRolls.axisFaces.join(' + ')
+                    : '2d6'
+                }}
+              </span>
+              <span class="prompt__roll-value num">{{ initiativeRolls.axis }}</span>
+            </div>
+            <div class="prompt__roll-row" data-side="soviet">
+              <span class="prompt__roll-side">苏联</span>
+              <span class="prompt__roll-dice num">
+                {{
+                  initiativeRolls.sovietFaces.length > 0
+                    ? initiativeRolls.sovietFaces.join(' + ')
+                    : '2d6'
+                }}
+              </span>
+              <span class="prompt__roll-value num">{{ initiativeRolls.soviet }}</span>
+            </div>
+            <p class="prompt__rolls-note">
+              {{
+                question.responder === 'axis' ? '轴心' : '苏联'
+              }}方点数高，胜出后选择本回合先手或后手。
+              <span v-if="initiativeRolls.rerolls > 0" class="num">
+                平局重掷 {{ initiativeRolls.rerolls }} 次。
+              </span>
+            </p>
+          </div>
+
           <p class="prompt__prompt">{{ question.prompt }}</p>
 
           <div v-if="canAnswer" class="prompt__options">
@@ -134,6 +201,63 @@ function answer(optionId?: string): void {
   margin: 0 0 var(--space-2);
   font-size: var(--text-base-size);
   color: var(--color-ink);
+}
+
+/* 2.3 先手判定：双方 2d6 同屏，胜者行加同色边；骰点是引擎给的，不是界面重掷 */
+.prompt__rolls {
+  display: grid;
+  gap: 4px;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-2);
+}
+
+.prompt__rolls-title {
+  margin: 0 0 2px;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.prompt__roll-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-left: 3px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+}
+
+.prompt__roll-row[data-side='axis'] {
+  border-left-color: var(--color-command-axis);
+}
+
+.prompt__roll-row[data-side='soviet'] {
+  border-left-color: var(--color-command-soviet);
+}
+
+.prompt__roll-side {
+  flex: 1;
+  font-weight: 700;
+}
+
+.prompt__roll-dice {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.prompt__roll-value {
+  min-width: 2ch;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  text-align: right;
+}
+
+.prompt__rolls-note {
+  margin: var(--space-1) 0 0;
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
 }
 
 .prompt__options {

@@ -7,6 +7,7 @@ import {
   DECISION_PHASES,
   initiativeQuestion,
   INITIATIVE_RULE,
+  type InitiativeRolls,
   isDecisionPhase,
   nextPhase,
   opponentOf,
@@ -193,6 +194,22 @@ describe('先手判定（2.3）', () => {
     expect(question.responder).toBe('soviet')
     expect(question.rule).toBe('2.3')
     expect(question.options?.map((option) => option.id)).toEqual(['first', 'second'])
+  })
+
+  it('把双方 2d6 与重掷次数带进确认窗，不只在题面写“某方胜出”', () => {
+    const rolls: InitiativeRolls = {
+      axis: { count: 2, faces: [2, 3], total: 5 },
+      soviet: { count: 2, faces: [1, 5], total: 6 },
+    }
+    const question = initiativeQuestion('soviet', rolls, 2)
+    expect(question.payload).toEqual({
+      chooser: 'soviet',
+      axisRoll: 5,
+      sovietRoll: 6,
+      axisFaces: [2, 3],
+      sovietFaces: [1, 5],
+      rerolls: 2,
+    })
   })
 
   it('落地：选择先手 → chooser 成为 firstPlayer；选择后手 → 对手成为 firstPlayer', () => {
