@@ -1,25 +1,82 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import { BaseButton, BaseDialog, BaseIcon } from '@/components/base'
 import OnlineRoomPanel from '@/components/online/OnlineRoomPanel.vue'
-import { useGameSessionStore, useSetupStore, useUiStore } from '@/stores'
+import { useGameSessionStore, useOnlineStore, useSetupStore, useUiStore } from '@/stores'
 
 const game = useGameSessionStore()
 const setup = useSetupStore()
+const online = useOnlineStore()
 const ui = useUiStore()
 const confirmNew = ref(false)
 const joinOpen = ref(false)
+const createOpen = ref(false)
 
 const hasCurrent = computed(() => game.session !== null || (setup.applied && !setup.finished))
 
-function onJoinOpen(): void {
+const resumeLabel = computed<string>(() => {
+  if (online.stage === 'game') return '继续联机对局'
+  if (online.host) return '继续联机准备'
+  return `联机房间 ${online.roomCode ?? ''} · 等待房主`
+})
+
+function onResumeOnline(): void {
+  if (!online.active) return
+  if (online.stage === 'game') {
+    ui.navigate('game')
+    return
+  }
+  if (online.host) {
+    ui.navigate('scenario')
+    return
+  }
   joinOpen.value = true
 }
 
+function onJoinOpenIfIdle(): void {
+  if (online.active) {
+    onResumeOnline()
+    return
+  }
+  joinOpen.value = true
+}
+
+function onCreateOpen(): void {
+  if (online.active) {
+    onResumeOnline()
+    return
+  }
+  createOpen.value = true
+}
+
 function onJoined(): void {
+  if (!online.active) return
   joinOpen.value = false
-  ui.navigate('game')
+  if (online.stage === 'game') {
+    ui.navigate('game')
+    return
+  }
+  ui.pushToast('info', '已加入房间，等待房主开局。')
+}
+
+watch(
+  () => online.stage,
+  (stage) => {
+    if (stage === 'game' && online.active && !online.host) onJoined()
+  },
+)
+
+function onCreated(): void {
+  createOpen.value = false
+  // 创建的是新的一局：旧对局/初设必须先清掉，否则已开局的剧本锁定会让选剧本页无法换剧本。
+  if (hasCurrent.value && !setup.restartGameNow()) {
+    online.leaveRoom()
+    ui.pushToast('warning', '无法开始新的联机对局；请先保存或结束当前对局')
+    return
+  }
+  online.reassertShell()
+  ui.navigate('scenario')
 }
 
 onMounted(() => {
@@ -55,30 +112,51 @@ function onRestart(): void {
 
         <div class="actions">
           <button
-            v-if="hasCurrent"
+            v-if="online.active"
             class="home__action home__action--primary"
             type="button"
-            @click="ui.navigate('game')"
+            @click="onResumeOnline"
           >
-            继续当前对局 <span aria-hidden="true">→</span>
+            {{ resumeLabel }} <span aria-hidden="true">→</span>
           </button>
-          <button
-            class="home__action"
-            :class="{ 'home__action--primary': !hasCurrent }"
-            type="button"
-            @click="onNewGame"
-          >
-            新建对局 <BaseIcon name="chevron-right" />
-          </button>
-          <button class="home__action" type="button" @click="onJoinOpen">
-            加入联机对局 <BaseIcon name="chevron-right" />
-          </button>
+          <template v-else>
+            <button
+              v-if="hasCurrent"
+              class="home__action home__action--primary"
+              type="button"
+              @click="ui.navigate('game')"
+            >
+              继续当前对局 <span aria-hidden="true">→</span>
+            </button>
+            <button
+              class="home__action"
+              :class="{ 'home__action--primary': !hasCurrent }"
+              type="button"
+              @click="onNewGame"
+            >
+              新建对局 <BaseIcon name="chevron-right" />
+            </button>
+            <button class="home__action" type="button" @click="onCreateOpen">
+              创建联机对局 <BaseIcon name="chevron-right" />
+            </button>
+            <button class="home__action" type="button" @click="onJoinOpenIfIdle">
+              加入联机对局 <BaseIcon name="chevron-right" />
+            </button>
+          </template>
         </div>
       </div>
     </section>
 
+    <BaseDialog v-model:open="createOpen" title="创建联机对局">
+      <p v-if="hasCurrent">
+        创建会替换当前对局/初设。需要保留进度时请先保存；房间建好后进入选剧本。
+      </p>
+      <OnlineRoomPanel variant="create" @created="onCreated" />
+    </BaseDialog>
+
     <BaseDialog v-model:open="joinOpen" title="加入联机对局">
-      <p>加入会替换当前本机对局/初设。需要保留进度时请先保存。</p>
+      <p v-if="online.active">已加入房间，等待房主开局。</p>
+      <p v-else>加入会替换当前本机对局/初设。需要保留进度时请先保存。</p>
       <OnlineRoomPanel variant="home" @joined="onJoined" />
     </BaseDialog>
 

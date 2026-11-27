@@ -255,16 +255,18 @@ describe('选剧本页：教学模式单列成栏（2026-11-23 第 6 批，源�
     expect(view).toContain('onTutorialChange(true)')
   })
 
-  it('常规组保留全部剧本（含教学剧本），教学只是另一栏的开局入口（第 7 批更正）', () => {
+  it('非联机常规组保留全部剧本（含教学剧本）；联机只列可双人推进的剧本', () => {
     // 用户 2026-11-23：「要分教学模式和教学剧本，不是让你把教学剧本删了」
-    // ⇒ 常规组不能再按 `!isTeachingScenario` 过滤掉 Intro。
-    expect(view).toContain('const normalChoices = computed(() => choices.value)')
-    expect(view).not.toContain('choices.value.filter((item) => !isTeachingScenario(item.id))')
+    // ⇒ 非联机时常规组不能再按 `!isTeachingScenario` 过滤掉 Intro。
+    expect(view).toContain('const normalChoices = computed(')
+    expect(view).toContain('!onlineActive.value || !isTeachingScenario(item.id)')
+    // 联机 PVP 才过滤掉单回合教学剧本；非联机走 `choices.value` 全集。
+    expect(view).toContain("onlineActive ? '联机 PVP 可用（不含单回合教学）'")
     // 常规卡的点击**不带** teaching 标记（同一剧本按正常 PvE 开局，不启动引导）
     expect(view).toContain('@click="chooseScenarioCard(item.id)"')
     // 教学卡带教学标记
     expect(view).toContain('@click="chooseScenarioCard(item.id, true)"')
-    // 默认选中就是上次选的剧本，不再强行改落到"第一个非教学剧本"
+    // 默认选中就是上次选的剧本；只有联机态才回落到第一个可双人推进剧本
     expect(view).toContain('const selectedId = ref(setup.scenarioId)')
     expect(view).not.toContain('choices.value.find((item) => !isTeachingScenario(item.id))?.id')
   })

@@ -2,12 +2,14 @@
 import { computed, ref, watch } from 'vue'
 
 import { ConsensusChecklist } from '@/components/hotseat'
+import OnlineRoomPanel from '@/components/online/OnlineRoomPanel.vue'
 import { ScenarioBriefingDialog } from '@/components/setup'
 import { provideUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
 import {
   useGameSessionStore,
   useHotseatStore,
+  useOnlineStore,
   useSetupStore,
   useTutorialStore,
   useUiStore,
@@ -23,10 +25,28 @@ const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 const tutorial = useTutorialStore()
+const online = useOnlineStore()
 const ui = useUiStore()
 
+const onlineActive = computed<boolean>(() => online.active)
 const modeOptions = computed(() => hotseat.MODE_LABELS)
 const choices = computed(() => setup.scenarioChoices)
+
+/**
+ * 剧本卡片分成两组（用户 2026-11-23：教学入口单列，但**不把教学剧本从常规组拿走**）
+ *
+ * · 「教学模式」＝另一种开局方式（PvE 外壳 + 逐步引导 + 脚本代演苏军），只列能教学的剧本；
+ * · 「常规剧本」＝全部剧本原样保留 —— Intro 维捷布斯克同样能在正常 PvE 下打
+ *   （第 7 批更正：上一批把 Intro 从这一组剔掉是错的）。
+ * 同一剧本在两组各有一张卡，靠 `tutorialMode` 区分"现在选中的是哪一种开局"。
+ *
+ * 联机 PVP 下只列可双人推进的常规剧本：单回合 `1 player turn` 的 Intro 没有苏方玩家回合，
+ * 也没有教学脚本给客人用，不能拿来开联机房。
+ */
+const teachingChoices = computed(() => choices.value.filter((item) => isTeachingScenario(item.id)))
+const normalChoices = computed(() =>
+  choices.value.filter((item) => !onlineActive.value || !isTeachingScenario(item.id)),
+)
 
 /**
  * 剧本记录的完整字段
@@ -49,7 +69,9 @@ function isTeachingScenario(id: string): boolean {
  * 现在剧本列表保持原样（含 Intro），教学只是上面那一栏的另一个入口。
  */
 const selectedId = ref(setup.scenarioId)
-const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
+const selected = computed(
+  () => normalChoices.value.find((item) => item.id === selectedId.value) ?? null,
+)
 
 /** 首回合天气的中文名（`scenarios.json` 的 firstWeather） */
 function weatherLabelOf(id: string): string {
@@ -84,17 +106,6 @@ const briefingOpen = computed({
 
 /* ── 用户 2026-11-18 第 2 条：Vitebsk 教学模式的独立开局方式 ── */
 
-/**
- * 剧本卡片分成两组（用户 2026-11-23：教学入口单列，但**不把教学剧本从常规组拿走**）
- *
- * · 「教学模式」＝另一种开局方式（PvE 外壳 + 逐步引导 + 脚本代演苏军），只列能教学的剧本；
- * · 「常规剧本」＝全部剧本原样保留 —— Intro 维捷布斯克同样能在正常 PvE 下打
- *   （第 7 批更正：上一批把 Intro 从这一组剔掉是错的）。
- * 同一剧本在两组各有一张卡，靠 `tutorialMode` 区分"现在选中的是哪一种开局"。
- */
-const teachingChoices = computed(() => choices.value.filter((item) => isTeachingScenario(item.id)))
-const normalChoices = computed(() => choices.value)
-
 /** 教学开关（选中教学剧本即开；换回常规剧本即关） */
 const tutorialMode = ref(false)
 
@@ -114,18 +125,33 @@ const soloPlayerScenario = computed(() => {
     : { playerLabel: '轴心国', aiLabel: '苏联', aiSide: 'soviet' as const }
 })
 
-/** 把纯 PVE 剧本的外壳落定（玩家执先手方，另一方 AI）；初设已锁定就不再改模式 */
+/** 把纯 PVE 剧本的外壳落定（玩家执先手方，另一方 AI）；初设已锁定或联机 PVP 下不再改模式 */
 function applySoloPveShell(): void {
   const shell = soloPlayerScenario.value
-  if (shell === null || hotseat.setupLocked) return
+  if (shell === null || hotseat.setupLocked || online.active) return
   if (hotseat.mode !== 'pve') hotseat.setMode('pve')
   if (hotseat.aiSide !== shell.aiSide) hotseat.setAiSide(shell.aiSide)
 }
 applySoloPveShell()
+
+/** 联机模式下不能开教学/纯 PVE；若从上一局带着教学态进来，先收起。 */
+watch(
+  onlineActive,
+  (active) => {
+    if (!active) return
+    if (tutorialMode.value) onTutorialChange(false)
+    if (!normalChoices.value.some((item) => item.id === selectedId.value)) {
+      selectedId.value = normalChoices.value[0]?.id ?? selectedId.value
+    }
+  },
+  { immediate: true },
+)
+
 /** 目标窗关掉前先记住这一局是不是教学，防止中途换剧本把标记带错 */
 const pendingTutorial = ref(false)
 
 function onTutorialChange(on: boolean): void {
+  if (online.active && on) return
   tutorialMode.value = on
   setTutorialAirAllInactive(on)
   setTutorialFixedReinforcement(on)
@@ -149,7 +175,9 @@ function onTutorialChange(on: boolean): void {
  * 选哪张就决定开局方式，剧本 id 相同也不混淆；换到非教学剧本自然收起教学。
  */
 function chooseScenarioCard(id: string, teaching = false): void {
+  if (online.active && teaching) return
   selectedId.value = id
+  if (online.active) return
   if (teaching && !tutorialMode.value) onTutorialChange(true)
   if (!teaching && tutorialMode.value) onTutorialChange(false)
   // 纯 PVE 剧本（Intro）：点它就把外壳落成「玩家执轴心、苏军 AI」
@@ -168,7 +196,9 @@ watch(selectedId, (id) => {
 function onEnterSetup(): void {
   const target = selected.value
   if (target === null) return
-  const teaching = tutorialMode.value && isTeachingScenario(target.id)
+  const onlineSide = online.active ? online.mySide : null
+  if (onlineSide !== null) online.reassertShell()
+  const teaching = onlineSide === null && tutorialMode.value && isTeachingScenario(target.id)
   pendingTutorial.value = teaching
   setTutorialAirAllInactive(teaching)
   setTutorialFixedReinforcement(teaching)
@@ -186,6 +216,8 @@ function onEnterSetup(): void {
     tutorial.stop()
   }
   const result = setup.requestEnterSetup(target.id)
+  // `enterSetup` 会按新剧本重置模式锁与视角；联机房要把机位重新收回来。
+  if (onlineSide !== null) online.reassertShell()
   if (result === 'blocked') {
     const failure = setup.lastAction
     pendingTutorial.value = false
@@ -202,6 +234,7 @@ function onConfirmBriefing(): void {
     ui.pushToast('warning', `无法进入初设：${failure?.detail ?? '请重新选择剧本'}`)
     return
   }
+  if (online.active && online.mySide !== null) online.reassertShell()
   if (pendingTutorial.value) tutorial.startFor()
   pendingTutorial.value = false
   ui.navigate('game')
@@ -235,7 +268,7 @@ function onConfirmBriefing(): void {
             <span class="num">{{ choices.length }} 个剧本</span>
           </header>
           <!-- 教学模式**单列**：教学是一种开局方式，不是给剧本加的复选框（用户 2026-11-23） -->
-          <section v-if="teachingChoices.length > 0" class="scenario__group">
+          <section v-if="!onlineActive && teachingChoices.length > 0" class="scenario__group">
             <header class="scenario__group-head">
               <h4>教学模式</h4>
               <span class="muted"
@@ -271,7 +304,10 @@ function onConfirmBriefing(): void {
           <section class="scenario__group">
             <header class="scenario__group-head">
               <h4>常规剧本</h4>
-              <span class="muted">{{ normalChoices.length }} 个 · 全部可正常 PvE 打</span>
+              <span class="muted">
+                {{ normalChoices.length }} 个 ·
+                {{ onlineActive ? '联机 PVP 可用（不含单回合教学）' : '全部可正常 PvE 打' }}
+              </span>
             </header>
             <ul class="scenario__list">
               <li v-for="item in normalChoices" :key="item.id">
@@ -300,6 +336,7 @@ function onConfirmBriefing(): void {
         </section>
 
         <div class="scenario__side">
+          <OnlineRoomPanel v-if="onlineActive" variant="scenario" />
           <!-- 用户 2026-11-19：选择剧本界面不放地图（预览块已撤） -->
           <section v-if="selected !== null" class="scenario__sheet" aria-labelledby="mode-title">
             <header class="scenario__heading">
@@ -372,7 +409,8 @@ function onConfirmBriefing(): void {
             </dl>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
-              <p v-if="tutorialMode" class="modes__locked">人机（苏军 AI · 教学固定）</p>
+              <p v-if="onlineActive" class="modes__locked">双人联机 PVP（固定） · 双方各执一方</p>
+              <p v-else-if="tutorialMode" class="modes__locked">人机（苏军 AI · 教学固定）</p>
               <p v-else-if="soloPlayerScenario" class="modes__locked">
                 人机（玩家执{{ soloPlayerScenario.playerLabel }} ·
                 {{ soloPlayerScenario.aiLabel }}由 AI 代演 · 剧本固定）
@@ -397,7 +435,7 @@ function onConfirmBriefing(): void {
               <p v-else class="modes__locked">{{ modeLabel }}</p>
             </fieldset>
             <fieldset
-              v-if="hotseat.mode === 'pve' && !tutorialMode && !soloPlayerScenario"
+              v-if="hotseat.mode === 'pve' && !tutorialMode && !soloPlayerScenario && !onlineActive"
               class="scenario__modes"
             >
               <legend>AI 控制方</legend>
