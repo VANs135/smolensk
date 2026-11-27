@@ -125,6 +125,22 @@ export function combatLossCandidates(combat: AiCombatSnapshot): AiAction[] {
   return out
 }
 
+/**
+ * 9.12e：撤退步的额外损失承受者候选（store 预演给出的 eligible 清单，未选中的才列）
+ *
+ * 落点没选齐时 store 的预演是 null ⇒ 这里返回空（不猜谁会 DG）。
+ */
+export function combatExtraLossCandidates(combat: AiCombatSnapshot): AiAction[] {
+  const plan = combat.extraLoss
+  if (plan === undefined) return []
+  const out: AiAction[] = []
+  for (const choice of plan.choices) {
+    if (choice.selected) continue
+    out.push({ kind: 'combatExtraLossTaker', unitId: choice.unitId })
+  }
+  return out
+}
+
 function pushUnique(
   out: TrainingCandidate[],
   seen: Set<string>,
@@ -370,7 +386,12 @@ export function candidateActionsOf(
         break
       }
       case 'retreat':
+        /*
+         * 9.12：先选撤退落点（组合候选），再定 9.12e 的额外损失承受者，最后才是战后推进。
+         * 顺序照 web 面板（撤退表格 → 额外损失 → 推进），让"先落点、后损失、再推进"在列表里看得出来。
+         */
         for (const action of combatRetreatCandidates(snapshot)) add(action)
+        for (const action of combatExtraLossCandidates(snapshot.combat)) add(action)
         add({ kind: 'combatAdvance' })
         break
       default:

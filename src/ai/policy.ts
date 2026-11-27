@@ -173,6 +173,16 @@ export interface AiCombatSnapshot {
      */
     ignored: number
   }
+  /**
+   * 9.12e：撤退步的**额外军力损失承受者**（只在 `step === 'retreat'` 且撤退落点已选齐时有值）
+   *
+   * `choices` 是 store `combatExtraLossPreview` 的候选（用 `retreatResolutionInput` + `resolveRetreats`
+   * 做纯预演得出，不落盘）；`selected` 跟 `combatInputs.extraLossTakerId` 比对，未选时 store 会退到第一枚。
+   */
+  extraLoss?: {
+    points: number
+    choices: readonly { unitId: string; label: string; selected: boolean }[]
+  }
 }
 
 export interface AiSupplySnapshot {
@@ -538,6 +548,12 @@ export type AiAction =
    * 只写 `combatInputs.lossTakerId`（web 面板就是直接写这个），随后 `combatLosses` 才把它交给引擎校验。
    */
   | { kind: 'combatLossTaker'; unitId: string | null }
+  /**
+   * 9.12e：撤退步的额外损失由哪枚 DG 单位承受（只写 `combatInputs.extraLossTakerId`）
+   *
+   * 候选池由 store 的 `combatExtraLossPreview` 给（落点没选齐时它返回 null ⇒ 这里也不给候选）。
+   */
+  | { kind: 'combatExtraLossTaker'; unitId: string }
   | { kind: 'combatOptions'; retreatHexes: number; lossPoints: number; ignoreOptions: boolean }
   | { kind: 'combatRetreatPaths'; paths: readonly { unitId: string; path: readonly AiHex[] }[] }
   | { kind: 'combatAdvance' }
@@ -694,6 +710,7 @@ export const AI_ACTION_KINDS = [
   'combatAutoResolve',
   'combatLosses',
   'combatLossTaker',
+  'combatExtraLossTaker',
   'combatOptions',
   'combatRetreatPaths',
   'combatAdvance',
@@ -1260,6 +1277,7 @@ const AI_BASELINE_KINDS: ReadonlySet<string> = new Set([
   'combatAutoResolve',
   'combatLosses',
   'combatLossTaker',
+  'combatExtraLossTaker',
   'combatOptions',
   'combatRetreatPaths',
   'combatAdvance',

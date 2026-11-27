@@ -177,6 +177,8 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
       return `combatArUnit:${action.side}:${ids.unit(action.unitId)}`
     case 'combatLossTaker':
       return `combatLossTaker:${action.unitId === null ? 'canonical' : ids.unit(action.unitId)}`
+    case 'combatExtraLossTaker':
+      return `combatExtraLossTaker:${ids.unit(action.unitId)}`
     case 'combatAutoResolve':
       return 'combatAutoResolve'
     case 'combatLosses':

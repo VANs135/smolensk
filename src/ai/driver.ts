@@ -1280,6 +1280,21 @@ export function snapshotOf(
               }
             })()
           : undefined,
+      /*
+       * 9.12e：撤退步的额外损失承受者。store 的预演只在「撤退落点选齐 + 能解出额外损失」时非 null，
+       * 其余时候这里也不给（不猜、不提前列）。
+       */
+      extraLoss:
+        w.combatState?.step === 'retreat' && w.combatExtraLossPreview !== null
+          ? {
+              points: w.combatExtraLossPreview.points,
+              choices: w.combatExtraLossPreview.choices.map((choice) => ({
+                unitId: choice.unit.instanceId,
+                label: choice.unit.name,
+                selected: choice.selected,
+              })),
+            }
+          : undefined,
     },
     supply: {
       planLoaded: plan !== null && plan !== undefined,
@@ -1902,6 +1917,11 @@ function execute(
       w.combatInputs = { ...w.combatInputs, lossTakerId: action.unitId }
       return true
     }
+    /*
+     * 9.12e：候选池由 store 的预演给，这里只转发 —— 不在候选里的单位由 `chooseExtraLossTaker` 自己拒。
+     */
+    case 'combatExtraLossTaker':
+      return w.chooseExtraLossTaker(action.unitId)
     case 'combatOptions': {
       const requirement = w.combatRequirement
       if (requirement === null) return false
