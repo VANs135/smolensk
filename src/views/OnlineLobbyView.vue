@@ -714,7 +714,7 @@ onBeforeUnmount(() => {
 
 .lobby__room-main strong {
   overflow: hidden;
-  font-size: var(--text-base);
+  font-size: var(--text-base-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
