@@ -97,6 +97,13 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
       return `constructionMarker:${action.marker}:${hexOf(action.hex)}`
     case 'gaugeConvert':
       return `gaugeConvert:${keyOf(ids.unit, action.unitId)}:${hexOf(action.hex)}`
+    /* F 阶段：右键菜单三步（菜单项 key 原样带上，分隔符只用于可读性） */
+    case 'contextOpen':
+      return `contextOpen:${keyOf(ids.unit, action.unitId)}`
+    case 'contextAct':
+      return `contextAct:${keyOf(ids.unit, action.targetId)}:${action.key}`
+    case 'contextClose':
+      return 'contextClose'
     case 'specialConfirm':
       return 'specialConfirm'
     case 'setupPreset':

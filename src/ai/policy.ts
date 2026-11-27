@@ -404,6 +404,25 @@ export interface AiSnapshot {
     /** 当前那件在 `steps` 里的位置（0 基；-1＝不在清单里） */
     stepIndex?: number
   }
+  /**
+   * F 阶段：**可开右键菜单的本方设施**（判据＝web `mapView.unitActionOptions(id)` 非空，
+   * 它内部已做「本方 + 本环节闸门 + 动作族」三层过滤 ⇒ 训练侧不另判）
+   *
+   * 客户端据此列「点这一枚设施」，点后走 `contextOpen`（＝web 左键点设施）。
+   */
+  facilities?: readonly { unitId: string; label: string; hex: AiHex }[]
+  /**
+   * F 阶段：**当前展开的右键菜单**（`null`/缺省＝没开）
+   *
+   * 原样取 web `mapView.contextOptions`（单目标那一支）：`items` 已按能力与本环节闸门筛过，
+   * `disabled` 是 store 给的禁用原因存在与否；客户端照「不可用项不出现」只列 `disabled === false`。
+   */
+  contextMenu?: {
+    hex: AiHex
+    targetId: string
+    targetLabel: string
+    items: readonly { key: string; label: string; rule: string; group: string; disabled: boolean }[]
+  } | null
   setupInProgress: boolean
   /** 会话停在回合准备（天气 / 先手判定，2.2 / 2.3）——此时只能推进，不能按旧环节行动 */
   locked: boolean
@@ -477,6 +496,15 @@ export type AiAction =
   | { kind: 'transportUnload'; pointId: string; amount: number }
   | { kind: 'constructionMarker'; marker: 'bridge' | 'airStrip'; hex: AiHex }
   | { kind: 'gaugeConvert'; unitId: string; hex: AiHex }
+  /*
+   * F 阶段（右键菜单族）：web 对设施/盘面算子的操作入口是**右键菜单**
+   * （`MapActionPopover` → `mapView.openContextAction(id, key)`）。
+   * 这里把「打开菜单 / 点菜单项 / 收起菜单」三步原样投影成动作；
+   * 菜单项清单与可执行性全部由 store 给（`counterActionsAt` / `applyContextAction`），训练侧不另判。
+   */
+  | { kind: 'contextOpen'; unitId: string }
+  | { kind: 'contextAct'; targetId: string; key: string }
+  | { kind: 'contextClose' }
   | { kind: 'specialConfirm' }
   /* 批 1：初设（一键预设 → 抽签 → 确认/开局） */
   | { kind: 'setupPreset' }
@@ -675,6 +703,9 @@ export const AI_ACTION_KINDS = [
   'transportUnload',
   'constructionMarker',
   'gaugeConvert',
+  'contextOpen',
+  'contextAct',
+  'contextClose',
   'specialConfirm',
   'setupPreset',
   'setupDraw',

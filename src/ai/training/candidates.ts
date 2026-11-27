@@ -185,6 +185,29 @@ function combatRetreatCandidates(snapshot: AiSnapshot): AiAction[] {
   return out
 }
 
+/**
+ * F 阶段：右键菜单族的候选（两支互斥）
+ *
+ * - 菜单已展开 ⇒ 只给「点某一项」「收起菜单」（web 也是菜单开着就不能再开另一个）；
+ * - 没展开 ⇒ 只给「点这一枚设施」（`facilities` 已由 store 按 本方 + 本环节闸门 过滤）。
+ * 禁用项不出现（不置灰）——判据是 store 给的 `disabled`。
+ */
+export function contextMenuCandidates(
+  menu: AiSnapshot['contextMenu'],
+  facilities: AiSnapshot['facilities'],
+): AiAction[] {
+  if (menu !== null && menu !== undefined) {
+    const out: AiAction[] = []
+    for (const item of menu.items) {
+      if (item.disabled) continue
+      out.push({ kind: 'contextAct', targetId: menu.targetId, key: item.key })
+    }
+    out.push({ kind: 'contextClose' })
+    return out
+  }
+  return (facilities ?? []).map((facility) => ({ kind: 'contextOpen', unitId: facility.unitId }))
+}
+
 export function candidateActionsOf(
   snapshot: AiSnapshot,
   identity: TrainingIdentity,
@@ -207,6 +230,11 @@ export function candidateActionsOf(
     if (snapshot.setup.drawVisible) add({ kind: 'setupDraw' })
     if (!snapshot.setup.cursorActive && !snapshot.setup.drawVisible) add({ kind: 'setupConfirm' })
   }
+
+  /*
+   * F 阶段：右键菜单族（web 的 `MapActionPopover` 同一套）—— 候选拆分见 `contextMenuCandidates`
+   */
+  for (const action of contextMenuCandidates(snapshot.contextMenu, snapshot.facilities)) add(action)
 
   if (snapshot.move.active) {
     if (!snapshot.move.hasStepped) {

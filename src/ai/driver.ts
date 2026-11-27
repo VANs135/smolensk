@@ -21,6 +21,7 @@ import {
 } from '@/engine/rules'
 import { hexDistance } from '@/engine/hex-geometry'
 import { useContainersStore } from '@/stores/containers'
+import { useMapViewStore } from '@/stores/map-view'
 import { formatHexPath, needsFuelOf } from '@/stores/workbench-model'
 import type { useGameSessionStore } from '@/stores/session'
 import type { useSetupStore } from '@/stores/setup'
@@ -687,6 +688,50 @@ function moveBranchOf(
  * ★ 副作用：会调用 `syncMemory`（跨环节时清空"本环节已试过 …"）。这是策略侧的过程状态，
  *   重置本身与盘面无关；但**不要**在一步里对同一 `memory` 反复调用来"检视未来"。
  */
+/**
+ * F 阶段：右键菜单族的两块投影（设施可点清单 + 当前展开的菜单）
+ *
+ * 纪律：这里**只做格式搬运**，判据全在 store ——
+ * - 哪一枚设施此刻有菜单：`mapView.unitActionOptions(id)` 非空（本方 + 本环节闸门 + 动作族）；
+ * - 菜单里有哪些项、哪项不可用：`mapView.contextOptions`（`counterActionsAt` 的产出）。
+ */
+function contextMenuProjection(
+  w: ReturnType<typeof useWorkbenchStore>,
+): Pick<AiSnapshot, 'facilities' | 'contextMenu'> {
+  const mv = useMapViewStore()
+  const facilities = w.units
+    .filter(
+      (unit) =>
+        (unit.noncombatKind ?? null) !== null && mv.unitActionOptions(unit.instanceId).length > 0,
+    )
+    .slice()
+    .sort(compareStableUnit)
+    .map((unit) => ({
+      unitId: unit.instanceId,
+      label: unit.name,
+      hex: { col: unit.hex.col, row: unit.hex.row },
+    }))
+  const popup = mv.popup
+  const targets = mv.contextOptions
+  const single = popup !== null && popup.variant === 'context' ? (targets[0] ?? null) : null
+  const contextMenu =
+    single === null || popup === null
+      ? null
+      : {
+          hex: { col: popup.hex.col, row: popup.hex.row },
+          targetId: single.id,
+          targetLabel: single.label,
+          items: single.actions.map((action) => ({
+            key: action.key,
+            label: action.label,
+            rule: action.rule,
+            group: action.group ?? '',
+            disabled: action.disabledReason !== null,
+          })),
+        }
+  return { facilities, contextMenu }
+}
+
 export function snapshotOf(
   ctx: AiContext,
   memory: AiMemory,
@@ -1054,6 +1099,13 @@ export function snapshotOf(
      * 客户端只渲染、不造句、也不判"该不该关"。改 web 面板即等于改客户端。
      */
     panel: projectPanel(),
+
+    /*
+     * F 阶段（右键菜单族）：设施的可点清单与当前展开的菜单，同样**整段读 mapView store**。
+     * - `facilities`：判据是 `unitActionOptions(id)` 非空（它内部已按 本方 + 本环节闸门 + 动作族 过滤）；
+     * - `contextMenu`：原样取 `contextOptions`（单目标支），禁用项保留 `disabled` 标记由客户端过滤。
+     */
+    ...contextMenuProjection(w),
 
     control: {
       // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值
@@ -1922,6 +1974,25 @@ function execute(
      */
     case 'combatExtraLossTaker':
       return w.chooseExtraLossTaker(action.unitId)
+    /*
+     * F 阶段：右键菜单三步 —— 与 web 的 `MapActionPopover` 完全同一条路
+     * （打开＝`openUnitContext`；点项＝`openContextAction`；收起＝`closePopup`）。
+     * 合法性、菜单内容、禁用原因都由 store 判，这里不预判。
+     */
+    case 'contextOpen': {
+      const mv = useMapViewStore()
+      const unit = w.units.find((item) => item.instanceId === action.unitId)
+      if (unit === undefined) return false
+      return mv.openUnitContext({ col: unit.hex.col, row: unit.hex.row }, action.unitId, {
+        x: 0,
+        y: 0,
+      })
+    }
+    case 'contextAct':
+      return useMapViewStore().openContextAction(action.targetId, action.key)
+    case 'contextClose':
+      useMapViewStore().closePopup()
+      return true
     case 'combatOptions': {
       const requirement = w.combatRequirement
       if (requirement === null) return false
