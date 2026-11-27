@@ -35,6 +35,7 @@ describe('9.11a/c 损失分担候选：先改派、再确认', () => {
             ],
             swapChoices: [],
             takerId: null,
+            ignored: 0,
           },
         }),
       ),
@@ -52,6 +53,7 @@ describe('9.11a/c 损失分担候选：先改派、再确认', () => {
             ],
             swapChoices: [{ unitId: 'a2', label: 'A2（AR3）' }],
             takerId: null,
+            ignored: 0,
           },
         }),
       ),
@@ -72,6 +74,7 @@ describe('9.11a/c 损失分担候选：先改派、再确认', () => {
               { unitId: 'a3', label: 'A3（AR2）' },
             ],
             takerId: 'a2',
+            ignored: 0,
           },
         }),
       ),
@@ -86,3 +89,4 @@ describe('9.11a/c 损失分担候选：先改派、再确认', () => {
     expect(combatLossCandidates(losses())).toEqual([{ kind: 'combatLosses' }])
   })
 })
+

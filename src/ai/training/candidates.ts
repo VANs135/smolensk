@@ -333,7 +333,11 @@ export function candidateActionsOf(
   const inCombatStep = snapshot.segment === 'combat.combat'
   if (inCombatStep) {
     for (const hex of snapshot.combat.adjacentDefenderHexes) add({ kind: 'combatSelect', hex })
-    if (snapshot.combat.defenderHex !== null) add({ kind: 'combatBegin' })
+    /*
+     * 9.1b：只有**还没开打**时才给「宣布进攻」。修前不看 `state`，损失屏/选项屏上仍挂着 combatBegin，
+     * 点下去一律被 store 拒（AI 侧就是空转）—— 按「不可用项不出现」只留真能做的。
+     */
+    if (snapshot.combat.state === null && snapshot.combat.defenderHex !== null) add({ kind: 'combatBegin' })
   }
   const combatState = snapshot.combat.state
   if (combatState !== null && !combatState.finished) {

@@ -166,6 +166,12 @@ export interface AiCombatSnapshot {
     canonical: readonly { unitId: string; steps: number }[]
     swapChoices: readonly { unitId: string; label: string }[]
     takerId: string | null
+    /**
+     * 9.11b：需求点数里**超出该方可承受军力**、被忽略的点数（＝需求 − 规范分配合计）
+     *
+     * 由引擎按 store 的两个数直接算（不让客户端自己减），界面据此补一句「忽略 N 点」。
+     */
+    ignored: number
   }
 }
 

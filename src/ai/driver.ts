@@ -1258,17 +1258,27 @@ export function snapshotOf(
        */
       lossPlan:
         w.combatState?.step === 'losses'
-          ? {
-              canonical: w.combatCanonicalLosses.map((item) => ({
+          ? (() => {
+              const canonical = w.combatCanonicalLosses.map((item) => ({
                 unitId: item.unitId,
                 steps: item.steps,
-              })),
-              swapChoices: w.combatLossSwapChoices.map((choice) => ({
-                unitId: choice.unitId,
-                label: choice.label,
-              })),
-              takerId: w.combatInputs.lossTakerId,
-            }
+              }))
+              /*
+               * 9.11b：需求点数超出该方可承受军力时，剩下的被忽略 —— 这个差额就是「忽略 N 点」。
+               * 两个数都来自 store（`combatRequirement.losses` 与 `combatCanonicalLosses`），这里只相减。
+               */
+              const required = w.combatRequirement?.losses ?? 0
+              const planned = canonical.reduce((sum, item) => sum + item.steps, 0)
+              return {
+                canonical,
+                swapChoices: w.combatLossSwapChoices.map((choice) => ({
+                  unitId: choice.unitId,
+                  label: choice.label,
+                })),
+                takerId: w.combatInputs.lossTakerId,
+                ignored: Math.max(0, required - planned),
+              }
+            })()
           : undefined,
     },
     supply: {
