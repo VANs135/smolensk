@@ -325,6 +325,13 @@ export interface AiSnapshot {
    * （合法格仍由 `rebuildLegalHexes` 的逐格引擎预演给出）
    */
   rebuildHqHexes: readonly AiHex[]
+  /**
+   * 专规 5.0c：**地图事实**（不是算子、不可选中、不进候选）——胜利格归属
+   * 判据来自 store（`victoryHexes` + `victoryControlOf` → 引擎 `controlOfHex`），客户端只照着画。
+   */
+  mapFacts?: {
+    controlMarkers: readonly { col: number; row: number; side: AiSide }[]
+  }
   /** B4：控制权（见 `AiControlSnapshot`） */
   control: AiControlSnapshot
   setupInProgress: boolean

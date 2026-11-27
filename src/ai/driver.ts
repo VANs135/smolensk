@@ -1018,6 +1018,24 @@ export function snapshotOf(
      */
     rebuildHqHexes: w.rebuildHqHexes.map((hex) => ({ col: hex.col, row: hex.row })),
 
+    /*
+     * 专规 5.0c：胜利格归属（地图事实层，不是算子、不可选中）。
+     * **判据只在 store**：`victoryHexes` 是剧本所列胜利格，`victoryControlOf` 内部已把
+     * 「格内可攻击单位」与「最后控制者账本」拼给引擎的 `controlOfHex`；这里只做摊平，
+     * 不重算控制，客户端也就不用自己猜归属。
+     */
+    mapFacts: {
+      controlMarkers: w.victoryHexes
+        .map((hex) => ({ hex: { col: hex.col, row: hex.row }, side: w.victoryControlOf(hex) }))
+        .filter((marker) => marker.side !== null)
+        .map((marker) => ({
+          col: marker.hex.col,
+          row: marker.hex.row,
+          side: marker.side as AiSide,
+        })),
+    },
+
+
     control: {
       // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值
       activeSide: aiControlsSide(controlMode, acting),
