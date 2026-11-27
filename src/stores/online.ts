@@ -27,7 +27,28 @@ import { useWorkbenchStore } from './workbench'
 import { applyOnlineState, captureOnlineState } from './online-snapshot'
 
 const PLAYER_ID_KEY = 'smolensk-online-player-id'
+const HOST_SECRET_PREFIX = 'smolensk-online-host-secret:'
+const GUEST_SECRET_PREFIX = 'smolensk-online-guest-secret:'
 const PLAYER_ID_MAX = 16
+
+function loadSeatSecret(prefix: string, code: string): string | null {
+  try {
+    const value = globalThis.sessionStorage?.getItem(`${prefix}${code.trim().toUpperCase()}`)
+    return value === undefined || value === null || value === '' ? null : value
+  } catch {
+    return null
+  }
+}
+
+function saveSeatSecret(prefix: string, code: string, secret: string | null): void {
+  try {
+    const key = `${prefix}${code.trim().toUpperCase()}`
+    if (secret === null) globalThis.sessionStorage?.removeItem(key)
+    else globalThis.sessionStorage?.setItem(key, secret)
+  } catch {
+    // 无 sessionStorage 时座位凭证只在当前页面生命周期内有效。
+  }
+}
 
 function randomPlayerSuffix(): string {
   try {
@@ -93,6 +114,9 @@ export const useOnlineStore = defineStore('online', () => {
    * 离房时要用密码释放座位/关闭房间；只在当前房间生命周期内保留，不持久化、不显示。
    */
   const roomPassword = ref<string | null>(null)
+  /** 当前座位的私有重连凭证；只存 sessionStorage 与内存，不进入公开房间摘要。 */
+  const hostSecret = ref<string | null>(null)
+  const guestSecret = ref<string | null>(null)
   /**
    * 初设交棒后的一次性写权
    *
@@ -109,6 +133,8 @@ export const useOnlineStore = defineStore('online', () => {
   let polling = false
   let attached = false
   let detachWatchers: (() => void)[] = []
+  /** 房间生命周期代际：离开/创建/加入后递增，丢弃上一房间的在途回包。 */
+  let lifecycleEpoch = 0
 
   const active = computed<boolean>(() => room.value !== null && mySide.value !== null)
   const roomCode = computed<string | null>(() => room.value?.code ?? null)
@@ -223,6 +249,29 @@ export const useOnlineStore = defineStore('online', () => {
     error.value = null
   }
 
+  function isSameRoom(code: string, epoch: number): boolean {
+    return lifecycleEpoch === epoch && room.value !== null && room.value.code === code
+  }
+
+  function hasHostSecret(code: string): boolean {
+    const normalized = code.trim().toUpperCase()
+    if (room.value?.code === normalized && hostSecret.value !== null) return true
+    return loadSeatSecret(HOST_SECRET_PREFIX, normalized) !== null
+  }
+
+  function hasGuestSecret(code: string): boolean {
+    const normalized = code.trim().toUpperCase()
+    if (room.value?.code === normalized && guestSecret.value !== null) return true
+    return loadSeatSecret(GUEST_SECRET_PREFIX, normalized) !== null
+  }
+
+  function setSeatSecrets(code: string, host: string | null, guest: string | null): void {
+    hostSecret.value = host
+    guestSecret.value = guest
+    saveSeatSecret(HOST_SECRET_PREFIX, code, host)
+    saveSeatSecret(GUEST_SECRET_PREFIX, code, guest)
+  }
+
   function setPlayerId(value: string): void {
     const next = value.trim().slice(0, PLAYER_ID_MAX)
     playerId.value = next
@@ -256,6 +305,7 @@ export const useOnlineStore = defineStore('online', () => {
   }
 
   async function acceptLatest(record: OnlineRoomRecord, note?: string): Promise<void> {
+    if (room.value === null || record.code !== room.value.code) return
     if (!active.value || record.seq <= seq.value) return
     if (mySide.value === null) return
     // 先记 hash/seq 再改 store：远程 patch 触发的订阅回调之后会看到 hash 相同而跳过回写
@@ -288,6 +338,7 @@ export const useOnlineStore = defineStore('online', () => {
     const current = room.value
     const side = mySide.value
     if (current === null || side === null || !canPublish.value) return
+    const epoch = lifecycleEpoch
     const finishingSetup = pendingSetupWriteSide.value === side
     if (publishing) {
       pendingPublish = true
@@ -302,6 +353,7 @@ export const useOnlineStore = defineStore('online', () => {
       fail(cause, '无法捕获对局状态')
       return
     }
+    if (!isSameRoom(current.code, epoch)) return
     if (hash === lastHash.value) {
       if (finishingSetup) pendingSetupWriteSide.value = null
       return
@@ -316,6 +368,7 @@ export const useOnlineStore = defineStore('online', () => {
         stateHash: hash,
         writerSide: side,
       })
+      if (!isSameRoom(current.code, epoch)) return
       room.value = record
       seq.value = record.seq
       lastHash.value = record.stateHash
@@ -323,6 +376,7 @@ export const useOnlineStore = defineStore('online', () => {
       error.value = null
       if (finishingSetup) pendingSetupWriteSide.value = null
     } catch (cause) {
+      if (!isSameRoom(current.code, epoch)) return
       if (cause instanceof RoomConflictError) {
         const latest = cause.latest
         const latestHash = latest.stateHash
@@ -357,9 +411,11 @@ export const useOnlineStore = defineStore('online', () => {
   async function pollOnce(): Promise<void> {
     const current = room.value
     if (current === null || polling) return
+    const epoch = lifecycleEpoch
     polling = true
     try {
       const latest = await transport.readRoom(current.code, current.token)
+      if (!isSameRoom(current.code, epoch)) return
       if (latest.seq > seq.value) await acceptLatest(latest)
       else {
         // 加入/离开只改房间元信息，不推进 seq；房主也要在大厅里看到座位变化。
@@ -377,6 +433,7 @@ export const useOnlineStore = defineStore('online', () => {
         }
       }
     } catch (cause) {
+      if (!isSameRoom(current.code, epoch)) return
       if (status.value !== 'error') status.value = 'offline'
       if (cause instanceof OnlineError) error.value = cause.message
     } finally {
@@ -442,6 +499,8 @@ export const useOnlineStore = defineStore('online', () => {
       return false
     }
     setPlayerId(id)
+    lifecycleEpoch += 1
+    pendingPublish = false
     try {
       const state: OnlineLobbyState = {
         stage: 'lobby',
@@ -459,9 +518,13 @@ export const useOnlineStore = defineStore('online', () => {
         state,
         stateHash: hash,
       })
+      if (typeof record.hostSecret !== 'string' || record.hostSecret === '') {
+        throw new OnlineError('badHostClaim', '房间创建响应缺少房主凭证，请重新建房')
+      }
       room.value = record
       mySide.value = input.side
       roomPassword.value = password
+      setSeatSecrets(record.code, record.hostSecret, null)
       seq.value = record.seq
       lastHash.value = hash
       pendingSetupWriteSide.value = null
@@ -494,10 +557,30 @@ export const useOnlineStore = defineStore('online', () => {
       return false
     }
     setPlayerId(id)
+    lifecycleEpoch += 1
+    pendingPublish = false
     try {
-      const record = await transport.joinRoom({ code, password, playerId: id })
-      // 房主用同一 ID + 密码重连时仍是房主；其他加入者是客人。
-      const side = record.hostId === id ? record.hostSide : otherOnlineSide(record.hostSide)
+      const record = await transport.joinRoom({
+        code,
+        password,
+        playerId: id,
+        hostSecret: loadSeatSecret(HOST_SECRET_PREFIX, code) ?? undefined,
+        guestSecret: loadSeatSecret(GUEST_SECRET_PREFIX, code) ?? undefined,
+      })
+      const isHost = record.hostId === id
+      if (isHost) {
+        if (typeof record.hostSecret !== 'string' || record.hostSecret === '') {
+          throw new OnlineError('badHostClaim', '房间响应缺少房主凭证，请重新建房')
+        }
+        setSeatSecrets(record.code, record.hostSecret, null)
+      } else {
+        if (typeof record.guestSecret !== 'string' || record.guestSecret === '') {
+          throw new OnlineError('badGuestClaim', '房间响应缺少客人凭证，请重新加入')
+        }
+        setSeatSecrets(record.code, null, record.guestSecret)
+      }
+      // 房主/客人凭各自座位凭证重连；显示 ID 本身不再决定座位。
+      const side = isHost ? record.hostSide : otherOnlineSide(record.hostSide)
       room.value = record
       mySide.value = side
       roomPassword.value = password
@@ -547,12 +630,26 @@ export const useOnlineStore = defineStore('online', () => {
       (stage.value === 'lobby' || stage.value === 'setup') && session.session === null
     const current = room.value
     const password = roomPassword.value
+    const isHost = current !== null && current.hostId === playerId.value
+    lifecycleEpoch += 1
+    pendingPublish = false
     if (current !== null && password !== null) {
       // 房主离开 = 关闭房间；客人离开 = 释放座位。失败不阻塞本地退出，TTL 会兜底清理。
       void transport
-        .leaveRoom({ code: current.code, password, playerId: playerId.value })
+        .leaveRoom({
+          code: current.code,
+          password,
+          playerId: playerId.value,
+          hostSecret: isHost
+            ? (hostSecret.value ?? loadSeatSecret(HOST_SECRET_PREFIX, current.code) ?? undefined)
+            : undefined,
+          guestSecret: !isHost
+            ? (guestSecret.value ?? loadSeatSecret(GUEST_SECRET_PREFIX, current.code) ?? undefined)
+            : undefined,
+        })
         .catch(() => undefined)
     }
+    if (current !== null) setSeatSecrets(current.code, null, null)
     if (pollTimer !== null) clearTimeout(pollTimer)
     if (publishTimer !== null) clearTimeout(publishTimer)
     pollTimer = null
@@ -563,6 +660,8 @@ export const useOnlineStore = defineStore('online', () => {
     room.value = null
     mySide.value = null
     roomPassword.value = null
+    hostSecret.value = null
+    guestSecret.value = null
     seq.value = 0
     lastHash.value = ''
     pendingSetupWriteSide.value = null
@@ -597,6 +696,8 @@ export const useOnlineStore = defineStore('online', () => {
     // 大厅 / 玩家
     playerId,
     setPlayerId,
+    hasHostSecret,
+    hasGuestSecret,
     rooms,
     directoryLoading,
     directoryError,

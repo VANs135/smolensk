@@ -78,6 +78,15 @@ const peerId = computed<string | null>(() => {
 
 const activeScenarioLabel = computed<string>(() => scenarioLabel(online.lobbyScenarioId))
 
+const joinSeatLabel = computed<string>(() => {
+  const target = joinTarget.value
+  if (target === null) return ''
+  const hostSeat = target.hostId === playerDraft.value.trim() && online.hasHostSecret(target.code)
+  return hostSeat
+    ? `房主 ${target.hostId} · 你将以 ${ONLINE_SIDE_LABEL[target.hostSide]} 房主身份重连。`
+    : `房主 ${target.hostId} · 你将以 ${ONLINE_SIDE_LABEL[target.guestSide]} 加入。`
+})
+
 const resumeLabel = computed<string>(() => {
   if (online.stage === 'game') return '进入对局'
   if (online.stage === 'setup') return '进入初设'
@@ -108,14 +117,20 @@ function stageLabel(room: OnlineRoomSummary): string {
 
 function isOwnSeat(room: OnlineRoomSummary): boolean {
   const id = playerDraft.value.trim()
-  return room.hostId === id || room.guestId === id
+  if (room.hostId === id) return online.hasHostSecret(room.code)
+  if (room.guestId === id) return online.hasGuestSecret(room.code)
+  return false
 }
 
 function canJoinRoom(room: OnlineRoomSummary): boolean {
+  const id = playerDraft.value.trim()
+  if (room.hostId === id && !online.hasHostSecret(room.code)) return false
   return room.joinable || isOwnSeat(room)
 }
 
 function joinLabel(room: OnlineRoomSummary): string {
+  const id = playerDraft.value.trim()
+  if (room.hostId === id && !online.hasHostSecret(room.code)) return '改 ID'
   if (room.joinable) return '加入'
   return isOwnSeat(room) ? '重连' : '已满'
 }
@@ -169,7 +184,18 @@ async function doCreate(): Promise<void> {
 }
 
 function openJoin(room: OnlineRoomSummary): void {
-  if (!canJoinRoom(room)) return
+  const id = playerDraft.value.trim()
+  if (room.hostId === id && !online.hasHostSecret(room.code)) {
+    ui.pushToast(
+      'warning',
+      '你填的 ID 与房主相同，但没有本机房主座位凭证；请换一个 ID 以客人加入，或用原浏览器标签重连',
+    )
+    return
+  }
+  if (!canJoinRoom(room)) {
+    ui.pushToast('warning', '房间已经坐满；只有持本机座位凭证的房主/客人能重连')
+    return
+  }
   savePlayerId()
   joinTarget.value = room
   joinPassword.value = ''
@@ -491,7 +517,7 @@ onBeforeUnmount(() => {
           <span class="num">{{ joinTarget.code }}</span>
         </p>
         <p class="lobby__hint">
-          房主 {{ joinTarget.hostId }} · 你将以 {{ ONLINE_SIDE_LABEL[joinTarget.guestSide] }} 加入。
+          {{ joinSeatLabel }}
         </p>
         <p v-if="hasCurrent" class="lobby__warn">
           加入会替换当前本机对局/初设；需要保留进度请先存档。

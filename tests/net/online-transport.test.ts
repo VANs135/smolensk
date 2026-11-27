@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { hashOnlineState } from '@/net/hash'
-import { MemoryRoomTransport } from '@/net/local'
+import { LocalRoomTransport, MemoryRoomTransport } from '@/net/local'
 import {
   ONLINE_PROTOCOL_VERSION,
   RoomConflictError,
@@ -52,6 +52,8 @@ describe('room transport CAS', () => {
     expect(room.seq).toBe(1)
     expect(room.guestSide).toBe('soviet')
     expect(room.name).toBe('测试房')
+    expect(room.hostSecret).toBeTruthy()
+    expect(room.guestSecret).toBeUndefined()
 
     const token = room.token
     const read = await transport.readRoom(room.code, token)
@@ -185,10 +187,17 @@ describe('room transport CAS', () => {
     expect(listed[0]?.joinable).toBe(true)
     expect(JSON.stringify(listed)).not.toContain('secret-123')
     expect(JSON.stringify(listed)).not.toContain(room.token)
+    expect(JSON.stringify(listed)).not.toContain(room.hostSecret ?? '')
+    expect(JSON.stringify(listed)).not.toContain('hostSecret')
+    expect(JSON.stringify(listed)).not.toContain('guestSecret')
 
     await expect(
       transport.joinRoom({ code: room.code, password: 'wrong', playerId: '客人B' }),
     ).rejects.toThrow('房间密码不正确')
+
+    await expect(
+      transport.joinRoom({ code: room.code, password: 'secret-123', playerId: '房主A' }),
+    ).rejects.toThrow('房主座位凭证不匹配')
 
     const joined = await transport.joinRoom({
       code: room.code,
@@ -199,17 +208,33 @@ describe('room transport CAS', () => {
     expect(joined.playerCount).toBe(2)
     expect(joined.joinable).toBe(false)
     expect(joined.token).toBe(room.token)
+    expect(joined.guestSecret).toBeTruthy()
+    expect(joined.hostSecret).toBeUndefined()
 
     await expect(
       transport.joinRoom({ code: room.code, password: 'secret-123', playerId: '第三人C' }),
     ).rejects.toThrow('房间已经坐满')
 
+    await expect(
+      transport.joinRoom({ code: room.code, password: 'secret-123', playerId: '客人B' }),
+    ).rejects.toThrow('客人座位凭证不匹配')
+
     const rejoined = await transport.joinRoom({
       code: room.code,
       password: 'secret-123',
       playerId: '客人B',
+      guestSecret: joined.guestSecret ?? undefined,
     })
     expect(rejoined.guestId).toBe('客人B')
+
+    const hostRejoined = await transport.joinRoom({
+      code: room.code,
+      password: 'secret-123',
+      playerId: '房主A',
+      hostSecret: room.hostSecret ?? undefined,
+    })
+    expect(hostRejoined.hostSecret).toBe(room.hostSecret)
+    expect(hostRejoined.guestSecret).toBeUndefined()
   })
 
   it('rejects duplicate room names', async () => {
@@ -250,13 +275,102 @@ describe('room transport CAS', () => {
       state: lobby,
       stateHash: await hashOnlineState(lobby),
     })
-    await transport.joinRoom({ code: room.code, password: 'pass1234', playerId: '客人' })
-    await transport.leaveRoom({ code: room.code, password: 'pass1234', playerId: '客人' })
+    const guest = await transport.joinRoom({
+      code: room.code,
+      password: 'pass1234',
+      playerId: '客人',
+    })
+    await expect(
+      transport.leaveRoom({ code: room.code, password: 'pass1234', playerId: '客人' }),
+    ).rejects.toThrow('客人座位凭证不匹配')
+    await transport.leaveRoom({
+      code: room.code,
+      password: 'pass1234',
+      playerId: '客人',
+      guestSecret: guest.guestSecret ?? undefined,
+    })
     const afterGuest = (await transport.listRooms())[0]
     expect(afterGuest?.guestId).toBeNull()
     expect(afterGuest?.joinable).toBe(true)
 
-    await transport.leaveRoom({ code: room.code, password: 'pass1234', playerId: '房主' })
+    await expect(
+      transport.leaveRoom({ code: room.code, password: 'pass1234', playerId: '房主' }),
+    ).rejects.toThrow('房主座位凭证不匹配')
+    await transport.leaveRoom({
+      code: room.code,
+      password: 'pass1234',
+      playerId: '房主',
+      hostSecret: room.hostSecret,
+    })
     expect(await transport.listRooms()).toEqual([])
+  })
+})
+
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>()
+
+  get length(): number {
+    return this.values.size
+  }
+
+  clear(): void {
+    this.values.clear()
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key)
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
+}
+
+describe('local room TTL', () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: new MemoryStorage(),
+    })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-27T00:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    Reflect.deleteProperty(globalThis, 'localStorage')
+  })
+
+  it('drops a local room after 24h without any update', async () => {
+    const transport = new LocalRoomTransport()
+    const lobby: OnlineLobbyState = {
+      stage: 'lobby',
+      protocol: ONLINE_PROTOCOL_VERSION,
+      dataVersion: 'test',
+      scenarioId: null,
+    }
+    const room = await transport.createRoom({
+      name: 'TTL 房',
+      password: 'pass1234',
+      hostId: '房主',
+      scenarioId: null,
+      hostSide: 'axis',
+      state: lobby,
+      stateHash: await hashOnlineState(lobby),
+    })
+    expect(await transport.listRooms()).toHaveLength(1)
+
+    vi.advanceTimersByTime(24 * 3_600_000 + 60_000)
+
+    expect(await transport.listRooms()).toEqual([])
+    await expect(transport.readRoom(room.code, room.token)).rejects.toThrow('房间')
   })
 })

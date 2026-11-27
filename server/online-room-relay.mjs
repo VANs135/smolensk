@@ -9,7 +9,9 @@
  *   · 房主自带显示 ID、房间名、房间密码建房；密码只存 scrypt 哈希；
  *   · 大厅 `GET /rooms` 只返回房名/房主 ID/人数/阶段，不返回密码或写房令牌；
  *   · 加入者 `POST /rooms/:code/join` 提交密码与自己的 ID，服务端校验后下发令牌；
- *   · 每间房最多两人；房主可用同一 ID + 密码重连，客人同理；
+ *   · 每个座位有独立凭证：房主建房时拿到 hostSecret，客人首次加入时拿到 guestSecret；
+ *     同一 ID 但没有对应凭证不能恢复座位（公开 ID 不再当作权限）。
+ *   · 每间房最多两人；房主/客人同一浏览器标签内可用 ID + 密码 + 座位凭证重连；
  *   · 房主离开会关闭房间，客人离开会释放座位；超过 TTL 未活动的房间自动清理。
  *
  * 运行：
@@ -36,6 +38,7 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const ROOM_TTL_MS = (Number.parseInt(process.env.ROOM_TTL_HOURS ?? '24', 10) || 24) * 3_600_000
 const NAME_MAX = 24
 const PLAYER_ID_MAX = 16
+const SECRET_MAX = 128
 const PASSWORD_MIN = 4
 const PASSWORD_MAX = 64
 const JOIN_FAIL_LIMIT = 8
@@ -56,6 +59,8 @@ function loadRooms() {
           typeof room?.code === 'string' &&
           typeof room?.name === 'string' &&
           typeof room?.hostId === 'string' &&
+          typeof room?.hostSecret === 'string' &&
+          (room?.guestSecret === null || typeof room?.guestSecret === 'string') &&
           typeof room?.passwordHash === 'string' &&
           typeof room?.passwordSalt === 'string'
         ) {
@@ -100,6 +105,20 @@ function normalizePassword(value) {
   const text = value.trim()
   if (text.length < PASSWORD_MIN || text.length > PASSWORD_MAX) return ''
   return text
+}
+
+function normalizeSecret(value) {
+  if (typeof value !== 'string') return ''
+  const text = value.trim()
+  if (text.length === 0 || text.length > SECRET_MAX) return ''
+  return text
+}
+
+function verifySeatSecret(candidate, expected) {
+  if (typeof expected !== 'string' || candidate === '') return false
+  const actual = Buffer.from(candidate, 'utf8')
+  const wanted = Buffer.from(expected, 'utf8')
+  return actual.length === wanted.length && timingSafeEqual(actual, wanted)
 }
 
 function hashPassword(password, salt) {
@@ -149,9 +168,12 @@ function publicRoom(room) {
   }
 }
 
-/** 通过密码校验后才下发的完整房间行；绝不带 passwordHash / passwordSalt。 */
-function wireRoom(room) {
-  return {
+/**
+ * 公共房间行；`seat` 指定时才附上该座位凭证。
+ * 普通 GET/PUT 响应永远不带 hostSecret / guestSecret。
+ */
+function wireRoom(room, seat = null) {
+  const wire = {
     ...publicRoom(room),
     token: room.token,
     seq: room.seq,
@@ -159,6 +181,9 @@ function wireRoom(room) {
     stateHash: room.stateHash,
     state: room.state,
   }
+  if (seat === 'host') wire.hostSecret = room.hostSecret
+  if (seat === 'guest' && typeof room.guestSecret === 'string') wire.guestSecret = room.guestSecret
+  return wire
 }
 
 function cors(response) {
@@ -337,9 +362,11 @@ const server = http.createServer(async (request, response) => {
       const record = {
         code: randomCode(),
         token: randomToken(),
+        hostSecret: randomToken(),
         name,
         hostId,
         guestId: null,
+        guestSecret: null,
         hostSide: body.hostSide,
         guestSide: body.hostSide === 'axis' ? 'soviet' : 'axis',
         scenarioId: body.scenarioId,
@@ -353,7 +380,7 @@ const server = http.createServer(async (request, response) => {
       }
       rooms.set(record.code, record)
       persistRooms()
-      json(response, 201, wireRoom(record))
+      json(response, 201, wireRoom(record, 'host'))
     } catch (error) {
       fail(response, error.message === 'bodyTooLarge' ? 413 : 400, error.message)
     }
@@ -379,6 +406,8 @@ const server = http.createServer(async (request, response) => {
       }
       const password = normalizePassword(body.password)
       const playerId = normalizeText(body.playerId, PLAYER_ID_MAX)
+      const hostSecret = normalizeSecret(body.hostSecret)
+      const guestSecret = normalizeSecret(body.guestSecret)
       if (password === '' || playerId === '') {
         fail(response, 400, 'invalidInput')
         return
@@ -390,20 +419,32 @@ const server = http.createServer(async (request, response) => {
       }
       clearJoinFailures(ip)
       if (playerId === room.hostId) {
-        // 房主刷新/换设备后用同一 ID + 密码回来：直接发回令牌，不占座位。
-        json(response, 200, wireRoom(room))
+        // 公开的显示 ID 不是权限；必须带建房时只给房主的座位凭证。
+        if (!verifySeatSecret(hostSecret, room.hostSecret)) {
+          fail(response, 403, 'badHostClaim')
+          return
+        }
+        json(response, 200, wireRoom(room, 'host'))
         return
       }
       if (typeof room.guestId === 'string' && room.guestId !== playerId) {
         fail(response, 409, 'roomFull')
         return
       }
-      if (typeof room.guestId !== 'string') {
-        room.guestId = playerId
-        room.updatedAt = new Date().toISOString()
-        persistRooms()
+      if (typeof room.guestId === 'string') {
+        // 已落座的客人重连；没有 guestSecret 不能凭公开客人 ID 顶替。
+        if (!verifySeatSecret(guestSecret, room.guestSecret)) {
+          fail(response, 403, 'badGuestClaim')
+          return
+        }
+        json(response, 200, wireRoom(room, 'guest'))
+        return
       }
-      json(response, 200, wireRoom(room))
+      room.guestId = playerId
+      room.guestSecret = randomToken()
+      room.updatedAt = new Date().toISOString()
+      persistRooms()
+      json(response, 200, wireRoom(room, 'guest'))
     } catch (error) {
       fail(response, error.message === 'bodyTooLarge' ? 413 : 400, error.message)
     }
@@ -423,14 +464,25 @@ const server = http.createServer(async (request, response) => {
       }
       const password = normalizePassword(body.password)
       const playerId = normalizeText(body.playerId, PLAYER_ID_MAX)
+      const hostSecret = normalizeSecret(body.hostSecret)
+      const guestSecret = normalizeSecret(body.guestSecret)
       if (password === '' || playerId === '' || !verifyPassword(password, room)) {
         fail(response, 401, 'badPassword')
         return
       }
       if (playerId === room.hostId) {
+        if (!verifySeatSecret(hostSecret, room.hostSecret)) {
+          fail(response, 403, 'badHostClaim')
+          return
+        }
         rooms.delete(code)
       } else if (room.guestId === playerId) {
+        if (!verifySeatSecret(guestSecret, room.guestSecret)) {
+          fail(response, 403, 'badGuestClaim')
+          return
+        }
         room.guestId = null
+        room.guestSecret = null
         room.updatedAt = new Date().toISOString()
       } else {
         fail(response, 403, 'badToken')

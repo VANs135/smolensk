@@ -53,6 +53,18 @@ export class HttpRoomTransport implements RoomTransport {
     if (error === 'roomNotFound' || status === 404) {
       return new OnlineError('roomNotFound', '房间不存在或已经关闭')
     }
+    if (error === 'badHostClaim') {
+      return new OnlineError(
+        'badHostClaim',
+        '房主座位凭证不匹配；请用原浏览器标签重连，或换一个 ID 以客人加入',
+      )
+    }
+    if (error === 'badGuestClaim') {
+      return new OnlineError(
+        'badGuestClaim',
+        '客人座位凭证不匹配；请用原浏览器标签重连，或换一个 ID 重新加入',
+      )
+    }
     if (error === 'badToken' || status === 403) {
       return new OnlineError('badToken', '房间令牌不匹配')
     }
@@ -109,6 +121,8 @@ export class HttpRoomTransport implements RoomTransport {
       body: JSON.stringify({
         password: input.password,
         playerId: input.playerId,
+        hostSecret: input.hostSecret,
+        guestSecret: input.guestSecret,
       }),
     })
     return this.assertRoomResponse(response)
@@ -125,7 +139,12 @@ export class HttpRoomTransport implements RoomTransport {
   async leaveRoom(input: LeaveRoomInput): Promise<void> {
     const response = await this.request(`/rooms/${encodeURIComponent(input.code)}/leave`, {
       method: 'POST',
-      body: JSON.stringify({ password: input.password, playerId: input.playerId }),
+      body: JSON.stringify({
+        password: input.password,
+        playerId: input.playerId,
+        hostSecret: input.hostSecret,
+        guestSecret: input.guestSecret,
+      }),
     })
     if (!response.ok) {
       const body = await this.readJson<Record<string, unknown>>(response)

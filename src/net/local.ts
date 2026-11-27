@@ -13,10 +13,14 @@ import {
 
 const ROOM_PREFIX = 'smolensk-online-room:'
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+/** 本机房间与中继保持同一默认生命周期：24 小时无活动自动删除。 */
+const ROOM_TTL_MS = 24 * 3_600_000
 
-/** localStorage 里的房间行比公开记录多一项密码；读给页面前必须剥掉。 */
+/** localStorage 里的房间行比公开记录多密码和两个座位凭证；读给页面前必须剥掉。 */
 interface StoredRoomRecord extends OnlineRoomRecord {
   password: string
+  hostSecret: string
+  guestSecret: string | null
 }
 
 function roomKey(code: string): string {
@@ -66,10 +70,20 @@ function summarize(record: OnlineRoomRecord): OnlineRoomSummary {
   }
 }
 
-function publicRecord(record: StoredRoomRecord): OnlineRoomRecord {
-  const { password: passwordValue, ...rest } = record
+function publicRecord(
+  record: StoredRoomRecord,
+  seat: 'host' | 'guest' | null = null,
+): OnlineRoomRecord {
+  const { password: passwordValue, hostSecret, guestSecret, ...rest } = record
   void passwordValue
+  if (seat === 'host') return { ...rest, hostSecret }
+  if (seat === 'guest' && guestSecret !== null) return { ...rest, guestSecret }
   return rest
+}
+
+function isExpired(record: StoredRoomRecord): boolean {
+  const updatedAt = Date.parse(record.updatedAt)
+  return !Number.isFinite(updatedAt) || Date.now() - updatedAt > ROOM_TTL_MS
 }
 
 function parseRecord(raw: string): StoredRoomRecord {
@@ -81,6 +95,8 @@ function parseRecord(raw: string): StoredRoomRecord {
     typeof parsed.hostId !== 'string' ||
     (parsed.guestId !== null && typeof parsed.guestId !== 'string') ||
     typeof parsed.password !== 'string' ||
+    typeof parsed.hostSecret !== 'string' ||
+    (parsed.guestSecret !== null && typeof parsed.guestSecret !== 'string') ||
     typeof parsed.seq !== 'number' ||
     typeof parsed.stateHash !== 'string' ||
     typeof parsed.state !== 'object' ||
@@ -100,7 +116,12 @@ function readStored(code: string): StoredRoomRecord {
   const key = roomKey(code.trim().toUpperCase())
   const raw = storage().getItem(key)
   if (raw === null) throw new OnlineError('roomNotFound', `房间 ${code} 不存在`)
-  return parseRecord(raw)
+  const record = parseRecord(raw)
+  if (isExpired(record)) {
+    storage().removeItem(key)
+    throw new OnlineError('roomNotFound', `房间 ${code} 已过期`)
+  }
+  return record
 }
 
 function writeStored(record: StoredRoomRecord): void {
@@ -110,17 +131,24 @@ function writeStored(record: StoredRoomRecord): void {
 function listStored(): StoredRoomRecord[] {
   const store = storage()
   const records: StoredRoomRecord[] = []
+  const expiredKeys: string[] = []
   for (let index = 0; index < store.length; index += 1) {
     const key = store.key(index)
     if (key === null || !key.startsWith(ROOM_PREFIX)) continue
     const raw = store.getItem(key)
     if (raw === null) continue
     try {
-      records.push(parseRecord(raw))
+      const record = parseRecord(raw)
+      if (isExpired(record)) {
+        expiredKeys.push(key)
+        continue
+      }
+      records.push(record)
     } catch {
       // 旧版本/损坏行不阻塞大厅；列表只展示能解析的新协议房间。
     }
   }
+  for (const key of expiredKeys) store.removeItem(key)
   return records
 }
 
@@ -152,7 +180,9 @@ function baseRecord(input: {
     name: input.name.trim(),
     password: input.password.trim(),
     hostId: input.hostId.trim(),
+    hostSecret: randomString(24),
     guestId: null,
+    guestSecret: null,
     hostSide: input.hostSide,
     guestSide: input.hostSide === 'axis' ? 'soviet' : 'axis',
     scenarioId: input.scenarioId,
@@ -202,7 +232,7 @@ export class LocalRoomTransport implements RoomTransport {
       token: randomString(24),
     })
     writeStored(record)
-    return publicRecord(record)
+    return publicRecord(record, 'host')
   }
 
   async joinRoom(input: JoinRoomInput): Promise<OnlineRoomRecord> {
@@ -212,21 +242,31 @@ export class LocalRoomTransport implements RoomTransport {
     }
     const playerId = input.playerId.trim()
     if (playerId === '') throw new OnlineError('invalidInput', '请先填写你的 ID')
-    // 房主刷新/换标签后用同一 ID + 密码回来：直接发回写房令牌，不占第二个座位。
-    if (playerId === current.hostId) return publicRecord(current)
-    if (current.guestId === null) {
-      const next: StoredRoomRecord = {
-        ...current,
-        guestId: playerId,
-        playerCount: 2,
-        joinable: false,
-        updatedAt: new Date().toISOString(),
+    if (playerId === current.hostId) {
+      if (input.hostSecret !== current.hostSecret) {
+        throw new OnlineError('badHostClaim', '房主座位凭证不匹配')
       }
-      writeStored(next)
-      return publicRecord(next)
+      return publicRecord(current, 'host')
     }
-    if (current.guestId === playerId) return publicRecord(current)
-    throw new OnlineError('roomFull', '房间已经坐满，只有房主和已加入的玩家能重连')
+    if (current.guestId === playerId) {
+      if (input.guestSecret !== current.guestSecret) {
+        throw new OnlineError('badGuestClaim', '客人座位凭证不匹配')
+      }
+      return publicRecord(current, 'guest')
+    }
+    if (current.guestId !== null) {
+      throw new OnlineError('roomFull', '房间已经坐满，只有房主和已加入的玩家能重连')
+    }
+    const next: StoredRoomRecord = {
+      ...current,
+      guestId: playerId,
+      guestSecret: randomString(24),
+      playerCount: 2,
+      joinable: false,
+      updatedAt: new Date().toISOString(),
+    }
+    writeStored(next)
+    return publicRecord(next, 'guest')
   }
 
   async leaveRoom(input: LeaveRoomInput): Promise<void> {
@@ -236,13 +276,20 @@ export class LocalRoomTransport implements RoomTransport {
     }
     const playerId = input.playerId.trim()
     if (playerId === current.hostId) {
+      if (input.hostSecret !== current.hostSecret) {
+        throw new OnlineError('badHostClaim', '房主座位凭证不匹配')
+      }
       storage().removeItem(roomKey(current.code))
       return
     }
     if (current.guestId !== playerId) throw new OnlineError('badToken', '你不在这个房间')
+    if (input.guestSecret !== current.guestSecret) {
+      throw new OnlineError('badGuestClaim', '客人座位凭证不匹配')
+    }
     writeStored({
       ...current,
       guestId: null,
+      guestSecret: null,
       playerCount: 1,
       joinable: true,
       updatedAt: new Date().toISOString(),
@@ -297,7 +344,7 @@ export class MemoryRoomTransport implements RoomTransport {
       token: randomString(24),
     })
     this.rooms.set(record.code, record)
-    return publicRecord(record)
+    return publicRecord(record, 'host')
   }
 
   async joinRoom(input: JoinRoomInput): Promise<OnlineRoomRecord> {
@@ -308,20 +355,31 @@ export class MemoryRoomTransport implements RoomTransport {
     }
     const playerId = input.playerId.trim()
     if (playerId === '') throw new OnlineError('invalidInput', '请先填写你的 ID')
-    if (playerId === current.hostId) return publicRecord(current)
-    if (current.guestId === null) {
-      const next: StoredRoomRecord = {
-        ...current,
-        guestId: playerId,
-        playerCount: 2,
-        joinable: false,
-        updatedAt: new Date().toISOString(),
+    if (playerId === current.hostId) {
+      if (input.hostSecret !== current.hostSecret) {
+        throw new OnlineError('badHostClaim', '房主座位凭证不匹配')
       }
-      this.rooms.set(current.code, next)
-      return publicRecord(next)
+      return publicRecord(current, 'host')
     }
-    if (current.guestId === playerId) return publicRecord(current)
-    throw new OnlineError('roomFull', '房间已经坐满，只有房主和已加入的玩家能重连')
+    if (current.guestId === playerId) {
+      if (input.guestSecret !== current.guestSecret) {
+        throw new OnlineError('badGuestClaim', '客人座位凭证不匹配')
+      }
+      return publicRecord(current, 'guest')
+    }
+    if (current.guestId !== null) {
+      throw new OnlineError('roomFull', '房间已经坐满，只有房主和已加入的玩家能重连')
+    }
+    const next: StoredRoomRecord = {
+      ...current,
+      guestId: playerId,
+      guestSecret: randomString(24),
+      playerCount: 2,
+      joinable: false,
+      updatedAt: new Date().toISOString(),
+    }
+    this.rooms.set(current.code, next)
+    return publicRecord(next, 'guest')
   }
 
   async leaveRoom(input: LeaveRoomInput): Promise<void> {
@@ -332,13 +390,20 @@ export class MemoryRoomTransport implements RoomTransport {
     }
     const playerId = input.playerId.trim()
     if (playerId === current.hostId) {
+      if (input.hostSecret !== current.hostSecret) {
+        throw new OnlineError('badHostClaim', '房主座位凭证不匹配')
+      }
       this.rooms.delete(current.code)
       return
     }
     if (current.guestId !== playerId) throw new OnlineError('badToken', '你不在这个房间')
+    if (input.guestSecret !== current.guestSecret) {
+      throw new OnlineError('badGuestClaim', '客人座位凭证不匹配')
+    }
     this.rooms.set(current.code, {
       ...current,
       guestId: null,
+      guestSecret: null,
       playerCount: 1,
       joinable: true,
       updatedAt: new Date().toISOString(),

@@ -86,8 +86,8 @@ export type OnlineState = OnlineLobbyState | OnlineLiveState
 /**
  * 大厅里可见的房间摘要
  *
- * 只放公开信息：房间名、房主 ID、已加入的客人 ID、阶段与人数。**房间密码与写房令牌
- * 不在此列**；密码只在加入时提交并由服务端校验。
+ * 只放公开信息：房间名、房主 ID、已加入的客人 ID、阶段与人数。**房间密码、写房令牌
+ * 与房主/客人座位凭证都不在此列**；密码只在加入时提交并由服务端校验。
  */
 export interface OnlineRoomSummary {
   code: string
@@ -118,6 +118,16 @@ export interface OnlineRoomRecord extends OnlineRoomSummary {
   /** 对 `state` 的稳定哈希，用于跳过无变化的整包 */
   stateHash: string
   state: OnlineState
+  /**
+   * 房主座位凭证；只在建房响应和房主重连响应下发，
+   * 不进入 `OnlineRoomSummary`，也不下发给客人。
+   */
+  hostSecret?: string
+  /**
+   * 客人座位凭证；只在首次加入/客人重连响应下发，
+   * 不进入 `OnlineRoomSummary`，也不下发房主。
+   */
+  guestSecret?: string | null
 }
 
 export interface CreateRoomInput {
@@ -139,6 +149,10 @@ export interface JoinRoomInput {
   password: string
   /** 加入者显示 ID */
   playerId: string
+  /** 房主重连凭证；只有房主原标签/原浏览器持有 */
+  hostSecret?: string
+  /** 已落座客人重连凭证；新客人首次加入时由服务端生成并返回 */
+  guestSecret?: string
 }
 
 export interface WriteRoomInput {
@@ -169,6 +183,10 @@ export interface LeaveRoomInput {
   code: string
   password: string
   playerId: string
+  /** 房主离开时必填；客人离开时忽略 */
+  hostSecret?: string
+  /** 客人离开时必填；房主离开时忽略 */
+  guestSecret?: string
 }
 
 export interface RoomTransport {
@@ -197,6 +215,8 @@ export class OnlineError extends Error {
   readonly code:
     | 'roomNotFound'
     | 'badToken'
+    | 'badHostClaim'
+    | 'badGuestClaim'
     | 'badPassword'
     | 'roomFull'
     | 'roomNameTaken'
