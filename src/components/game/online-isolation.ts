@@ -21,7 +21,9 @@ export function useOnlineTableIsolation(allGroups: ComputedRef<BoxRailGroup[]>):
   const online = useOnlineStore()
   const hotseat = useHotseatStore()
 
-  const onlineWaiting = computed<boolean>(() => online.active && !online.canWrite)
+  const onlineWaiting = computed<boolean>(
+    () => online.active && !online.canWrite && online.stage !== 'setup',
+  )
   const boxRailGroups = computed<readonly BoxRailGroup[]>(() =>
     online.active
       ? allGroups.value.filter(

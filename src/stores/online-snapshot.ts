@@ -7,10 +7,11 @@ import type { useWorkbenchStore } from './workbench'
 import {
   OnlineError,
   ONLINE_PROTOCOL_VERSION,
-  type OnlineGameState,
+  type OnlineLiveState,
   type OnlineLobbyState,
-  type OnlineState,
+  type OnlineSetupState,
   type OnlineSide,
+  type OnlineState,
 } from '@/net/online-types'
 
 export interface OnlineStoreBundle {
@@ -114,20 +115,35 @@ function withoutKeys(
  */
 export function captureOnlineState(stores: OnlineStoreBundle): OnlineState {
   if (stores.session.session === null) {
-    const lobby: OnlineLobbyState = {
-      stage: 'lobby',
-      protocol: ONLINE_PROTOCOL_VERSION,
-      dataVersion: DATA_VERSION,
-      // 只有真正进入初设后才把剧本写进房间；开始台的默认剧本号不算“已选”
-      scenarioId: stores.setup.applied ? stores.session.scenarioId : null,
+    if (!stores.setup.applied) {
+      const lobby: OnlineLobbyState = {
+        stage: 'lobby',
+        protocol: ONLINE_PROTOCOL_VERSION,
+        dataVersion: DATA_VERSION,
+        // 只有真正进入初设后才把剧本写进房间；开始台的默认剧本号不算“已选”
+        scenarioId: null,
+      }
+      return lobby
     }
-    return lobby
+    // 初设阶段也发完整状态：双方各自布设本方，不能只让房主在本机单机布完两方。
+    const setup: OnlineSetupState = {
+      stage: 'setup',
+      ...captureLiveState(stores),
+    }
+    return setup
   }
+  return {
+    stage: 'game',
+    ...captureLiveState(stores),
+  }
+}
+
+/** `setup` / `game` 共用的完整状态复制；模式恒为 PVP 外壳。 */
+function captureLiveState(stores: OnlineStoreBundle): Omit<OnlineLiveState, 'stage'> {
   const sessionState = withoutKeys(cloneWire(stores.session.$state), SESSION_LOCAL_KEYS)
   const workbenchState = withoutKeys(cloneWire(stores.workbench.$state), WORKBENCH_LOCAL_KEYS)
   const setupState = withoutKeys(cloneWire(stores.setup.$state), SETUP_LOCAL_KEYS)
   return {
-    stage: 'game',
     protocol: ONLINE_PROTOCOL_VERSION,
     dataVersion: DATA_VERSION,
     scenarioId: stores.session.scenarioId,
@@ -146,7 +162,7 @@ export function captureOnlineState(stores: OnlineStoreBundle): OnlineState {
 }
 
 /** 协议/数据版本/剧本对不上时拒收；错误文案直接给界面。 */
-export function assertOnlineState(state: OnlineGameState, expectedScenarioId?: string): void {
+export function assertOnlineState(state: OnlineLiveState, expectedScenarioId?: string): void {
   if (state.protocol !== ONLINE_PROTOCOL_VERSION) {
     throw new OnlineError('protocolMismatch', '联机协议版本不一致，请双方使用同一构建')
   }
@@ -159,6 +175,13 @@ export function assertOnlineState(state: OnlineGameState, expectedScenarioId?: s
     state.session['scenarioId'] !== state.scenarioId
   ) {
     throw new OnlineError('scenarioMismatch', '房间里的会话剧本与房间头不一致')
+  }
+  const active = state.session['session']
+  if (state.stage === 'setup' && active !== null) {
+    throw new OnlineError('scenarioMismatch', '初设房间不应带已开局的会话')
+  }
+  if (state.stage === 'game' && (typeof active !== 'object' || active === null)) {
+    throw new OnlineError('emptyState', '对局房间缺少活动会话')
   }
   if (expectedScenarioId !== undefined && state.scenarioId !== expectedScenarioId) {
     throw new OnlineError('scenarioMismatch', '房间剧本与当前对局不一致')
@@ -174,7 +197,7 @@ export function assertOnlineState(state: OnlineGameState, expectedScenarioId?: s
  */
 export function applyOnlineState(
   stores: OnlineStoreBundle,
-  state: OnlineGameState,
+  state: OnlineLiveState,
   mySide: OnlineSide,
 ): void {
   assertOnlineState(state, state.scenarioId)

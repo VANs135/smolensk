@@ -345,7 +345,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <BaseButton v-if="showAdvance" class="bar__advance" variant="primary" @click="onAdvance"
         >{{ advanceLabel }} <span aria-hidden="true">→</span></BaseButton
       >
-      <span v-else-if="onlineWait" class="bar__block" role="status">等待对方操作</span>
+      <span v-else-if="onlineWait" class="bar__block" role="status">{{ online.turnLabel }}</span>
       <span v-else class="bar__block" role="status" :title="liveBlock?.rule">
         {{ liveBlock?.reason ?? advanceLabel }}
       </span>

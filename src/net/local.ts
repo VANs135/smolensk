@@ -51,7 +51,7 @@ function parseRecord(raw: string): OnlineRoomRecord {
     throw new OnlineError('transportUnavailable', '本机房间记录损坏')
   }
   const stage = (parsed.state as { stage?: unknown }).stage
-  if (stage !== 'lobby' && stage !== 'game') {
+  if (stage !== 'lobby' && stage !== 'setup' && stage !== 'game') {
     throw new OnlineError('transportUnavailable', '本机房间协议版本过旧，请重新建房')
   }
   return parsed as OnlineRoomRecord

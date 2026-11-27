@@ -17,13 +17,14 @@ const hasCurrent = computed(() => game.session !== null || (setup.applied && !se
 
 const resumeLabel = computed<string>(() => {
   if (online.stage === 'game') return '继续联机对局'
+  if (online.stage === 'setup') return '继续联机初设'
   if (online.host) return '继续联机准备'
   return `联机房间 ${online.roomCode ?? ''} · 等待房主`
 })
 
 function onResumeOnline(): void {
   if (!online.active) return
-  if (online.stage === 'game') {
+  if (online.stage === 'game' || online.stage === 'setup') {
     ui.navigate('game')
     return
   }
@@ -53,17 +54,17 @@ function onCreateOpen(): void {
 function onJoined(): void {
   if (!online.active) return
   joinOpen.value = false
-  if (online.stage === 'game') {
+  if (online.stage === 'game' || online.stage === 'setup') {
     ui.navigate('game')
     return
   }
-  ui.pushToast('info', '已加入房间，等待房主开局。')
+  ui.pushToast('info', '已加入房间，等待房主选剧本。')
 }
 
 watch(
   () => online.stage,
   (stage) => {
-    if (stage === 'game' && online.active && !online.host) onJoined()
+    if ((stage === 'setup' || stage === 'game') && online.active && !online.host) onJoined()
   },
 )
 
@@ -155,7 +156,7 @@ function onRestart(): void {
     </BaseDialog>
 
     <BaseDialog v-model:open="joinOpen" title="加入联机对局">
-      <p v-if="online.active">已加入房间，等待房主开局。</p>
+      <p v-if="online.active">已加入房间，等待房主选剧本/进入初设。</p>
       <p v-else>加入会替换当前本机对局/初设。需要保留进度时请先保存。</p>
       <OnlineRoomPanel variant="home" @joined="onJoined" />
     </BaseDialog>

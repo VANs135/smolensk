@@ -7,6 +7,7 @@ import {
   RoomConflictError,
   type OnlineGameState,
   type OnlineLobbyState,
+  type OnlineSetupState,
 } from '@/net/online-types'
 
 function sampleState(scenarioId = '1'): OnlineGameState {
@@ -15,9 +16,22 @@ function sampleState(scenarioId = '1'): OnlineGameState {
     protocol: ONLINE_PROTOCOL_VERSION,
     dataVersion: 'test',
     scenarioId,
-    session: { scenarioId },
+    session: { scenarioId, session: { scenarioId } },
     workbench: {},
     setup: {},
+    hotseat: { mode: 'pvp', aiSide: null, setupLocked: true, scriptedSide: null },
+  }
+}
+
+function sampleSetupState(scenarioId = '3'): OnlineSetupState {
+  return {
+    stage: 'setup',
+    protocol: ONLINE_PROTOCOL_VERSION,
+    dataVersion: 'test',
+    scenarioId,
+    session: { scenarioId, session: null },
+    workbench: {},
+    setup: { applied: true, setupSideCursor: 'soviet' },
     hotseat: { mode: 'pvp', aiSide: null, setupLocked: true, scriptedSide: null },
   }
 }
@@ -101,11 +115,23 @@ describe('room transport CAS', () => {
     expect(named.scenarioId).toBe('3')
     expect(named.state.stage).toBe('lobby')
 
+    const setup = sampleSetupState('3')
+    const inSetup = await transport.writeRoom({
+      code: room.code,
+      token: 'lobby-token',
+      expectedSeq: named.seq,
+      state: setup,
+      stateHash: await hashOnlineState(setup),
+      writerSide: 'axis',
+    })
+    expect(inSetup.scenarioId).toBe('3')
+    expect(inSetup.state.stage).toBe('setup')
+
     const game = sampleState('3')
     const started = await transport.writeRoom({
       code: room.code,
       token: 'lobby-token',
-      expectedSeq: named.seq,
+      expectedSeq: inSetup.seq,
       state: game,
       stateHash: await hashOnlineState(game),
       writerSide: 'axis',

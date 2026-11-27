@@ -9,7 +9,7 @@ import {
   ONLINE_SIDE_LABEL,
   OnlineError,
   RoomConflictError,
-  isOnlineGameState,
+  isOnlineLiveState,
   otherOnlineSide,
   type OnlineLobbyState,
   type OnlineRoomRecord,
@@ -59,6 +59,14 @@ export const useOnlineStore = defineStore('online', () => {
   const error = ref<string | null>(null)
   const notice = ref<string | null>(null)
   const applyingRemote = ref(false)
+  /**
+   * 初设交棒后的一次性写权
+   *
+   * 当前布设方点“确认本方布设”时，游标会**在同一动作里**交给对方；等 watcher 触发发布，
+   * `setup.setupSideCursor` 已经不是自己了。若只看游标，最后一份“本方已完成”的初设状态
+   * 永远写不出去。此标记只允许该方补写一次，成功后清空，避免退到等待方后仍覆盖对方。
+   */
+  const pendingSetupWriteSide = ref<OnlineSide | null>(null)
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let publishTimer: ReturnType<typeof setTimeout> | null = null
@@ -83,18 +91,20 @@ export const useOnlineStore = defineStore('online', () => {
   const lobbyScenarioId = computed<string | null>(() => room.value?.scenarioId ?? null)
 
   /**
-   * 当前是否轮到本人写入
+   * 当前是否轮到本人**操作**
    *
    * 只用现有界面闸门的同源投影：初设看游标；待答问题看 responder；战斗/轰炸看
    * `engagementDecisionRole`（与 `viewerCombatRoles` 同一对攻守角色）；常规环节看
-   * `segmentGateQuery.side`。它用于避免“没轮到你却把本地变化推到房间”，不是规则判据。
+   * `segmentGateQuery.side`。它同时用于界面按钮与发布闸门，但不是规则判据。
    *
-   * `lobby` 阶段没有会话，房主负责选剧本/初设；客人只读等待。
+   * `lobby` 阶段没有会话，房主负责选剧本；`setup` 阶段双方各自布设本方，游标在谁身上
+   * 就只有谁能动——房主不能替客人布设，客人也不能替房主布设。
    */
   const canWrite = computed<boolean>(() => {
     const side = mySide.value
     if (side === null) return false
     if (stage.value === 'lobby') return host.value
+    if (stage.value === 'setup') return setup.setupSideCursor === side
     if (!setup.finished) return setup.setupSideCursor === side
     if (session.question !== null) return session.question.responder === side
     if (workbench.combatState !== null || workbench.barrageState !== null) {
@@ -103,14 +113,46 @@ export const useOnlineStore = defineStore('online', () => {
     return (workbench.segmentGateQuery.side ?? workbench.activeSide) === side
   })
 
-  const turnLabel = computed<string>(() => (canWrite.value ? '轮到你操作' : '等待对方操作'))
+  /**
+   * 当前是否允许把本机状态写进房间
+   *
+   * 与 `canWrite` 分开的两个例外：
+   *   · `lobby` 房主刚进初设时，游标可能停在客人一侧，房主仍须把第一份完整初设发出去；
+   *   · 当前方确认后游标已交棒，须补写最后一份“本方完成”的状态（`pendingSetupWriteSide`）。
+   * 其余时刻仍只允许当前操作方写，防止挂机方因本地鼠标/浮窗变化覆盖对方正在进行的初设。
+   */
+  const canPublish = computed<boolean>(() => {
+    const side = mySide.value
+    if (side === null) return false
+    if (stage.value === 'lobby') return host.value
+    if (stage.value === 'setup') {
+      // 双方确认完毕、房主已在本机建立 session：这一包实际会捕获成 `game`，必须放行。
+      if (session.session !== null) return host.value
+      return setup.setupSideCursor === side || pendingSetupWriteSide.value === side
+    }
+    return canWrite.value
+  })
+
+  const turnLabel = computed<string>(() => {
+    if (stage.value === 'setup') {
+      if (setup.setupSideCursor === null) {
+        return host.value ? '轮到你完成初设' : '等待房主开局'
+      }
+      return canWrite.value ? '轮到你布设' : '等待对方布设'
+    }
+    return canWrite.value ? '轮到你操作' : '等待对方操作'
+  })
 
   const statusLabel = computed<string>(() => {
     if (status.value === 'creating') return '正在创建房间…'
     if (status.value === 'joining') return '正在加入房间…'
     if (stage.value === 'lobby') {
       if (mySide.value === null) return '未联机'
-      return host.value ? '房间已建立 · 等待开局' : '已加入房间 · 等待房主开局'
+      return host.value ? '房间已建立 · 等待进入初设' : '已加入房间 · 等待房主选剧本'
+    }
+    if (stage.value === 'setup') {
+      if (mySide.value === null) return '未联机'
+      return `同步初设 · ${turnLabel.value}`
     }
     if (status.value === 'waiting') return '已连接，等待对方落座…'
     if (status.value === 'synced') return `已同步 · ${turnLabel.value}`
@@ -155,7 +197,7 @@ export const useOnlineStore = defineStore('online', () => {
     seq.value = record.seq
     lastHash.value = record.stateHash
     room.value = record
-    if (!isOnlineGameState(record.state)) {
+    if (!isOnlineLiveState(record.state)) {
       status.value = 'synced'
       if (note !== undefined) notice.value = note
       error.value = null
@@ -179,7 +221,8 @@ export const useOnlineStore = defineStore('online', () => {
   async function publishNow(): Promise<void> {
     const current = room.value
     const side = mySide.value
-    if (current === null || side === null || !canWrite.value) return
+    if (current === null || side === null || !canPublish.value) return
+    const finishingSetup = pendingSetupWriteSide.value === side
     if (publishing) {
       pendingPublish = true
       return
@@ -193,7 +236,10 @@ export const useOnlineStore = defineStore('online', () => {
       fail(cause, '无法捕获对局状态')
       return
     }
-    if (hash === lastHash.value) return
+    if (hash === lastHash.value) {
+      if (finishingSetup) pendingSetupWriteSide.value = null
+      return
+    }
     publishing = true
     try {
       const record = await transport.writeRoom({
@@ -209,6 +255,7 @@ export const useOnlineStore = defineStore('online', () => {
       lastHash.value = record.stateHash
       status.value = 'synced'
       error.value = null
+      if (finishingSetup) pendingSetupWriteSide.value = null
     } catch (cause) {
       if (cause instanceof RoomConflictError) {
         const latest = cause.latest
@@ -219,9 +266,11 @@ export const useOnlineStore = defineStore('online', () => {
           seq.value = latest.seq
           lastHash.value = latestHash
           status.value = 'synced'
+          if (finishingSetup) pendingSetupWriteSide.value = null
         } else {
           try {
             await acceptLatest(latest, '对方先提交了一步，已同步到最新局面；请重新操作刚才的步骤')
+            if (finishingSetup) pendingSetupWriteSide.value = null
           } catch {
             status.value = 'error'
           }
@@ -313,6 +362,7 @@ export const useOnlineStore = defineStore('online', () => {
       mySide.value = side
       seq.value = record.seq
       lastHash.value = hash
+      pendingSetupWriteSide.value = null
       status.value = 'synced'
       start()
       return true
@@ -333,8 +383,9 @@ export const useOnlineStore = defineStore('online', () => {
       mySide.value = side
       seq.value = record.seq
       lastHash.value = record.stateHash
-      if (!isOnlineGameState(record.state)) {
-        // lobby 阶段不碰本机盘面：对方还没开局，加入只是占座等待。
+      pendingSetupWriteSide.value = null
+      if (!isOnlineLiveState(record.state)) {
+        // lobby 阶段不碰本机盘面：对方还没进入初设/开局，加入只是占座等待。
         status.value = 'synced'
       } else {
         hotseat.adoptOnlineShell(side)
@@ -355,17 +406,15 @@ export const useOnlineStore = defineStore('online', () => {
     }
   }
 
-  /** 把本机组织方式重新收成联机外壳；开始台建房/换到选剧本页后调用。 */
+  /**
+   * 把本机组织方式重新收成联机外壳；开始台建房/换到选剧本页后调用。
+   *
+   * 初设阶段也锁在本人阵营：双方各自布设本方，不能靠切换视角替对方落子。
+   */
   function reassertShell(): void {
     const side = mySide.value
     if (side === null) return
-    const inSoloSetup = stage.value === 'lobby' && !setup.finished && session.session === null
-    hotseat.adoptOnlineShell(side, { lockViewer: !inSoloSetup })
-    if (inSoloSetup) {
-      // 联机初设没有客人参与：房主必须能按布设游标看/操作双方，不能被锁在本人阵营。
-      const cursor = setup.setupSideCursor
-      if (cursor !== null) hotseat.setViewerSide(cursor)
-    }
+    hotseat.adoptOnlineShell(side)
   }
 
   /** 手动刷新（设置面板「立即同步」）；不改变本地方向。 */
@@ -374,7 +423,8 @@ export const useOnlineStore = defineStore('online', () => {
   }
 
   function leaveRoom(): void {
-    const wasLobbyHost = stage.value === 'lobby' && host.value
+    const beforeGame =
+      (stage.value === 'lobby' || stage.value === 'setup') && session.session === null
     if (pollTimer !== null) clearTimeout(pollTimer)
     if (publishTimer !== null) clearTimeout(publishTimer)
     pollTimer = null
@@ -386,33 +436,30 @@ export const useOnlineStore = defineStore('online', () => {
     mySide.value = null
     seq.value = 0
     lastHash.value = ''
+    pendingSetupWriteSide.value = null
     status.value = 'idle'
     error.value = null
     notice.value = null
     hotseat.unlockViewer()
-    // 还没开局就退出：把初设模式锁也解开，别让房主卡在不可改的 PVP 外壳里。
-    if (wasLobbyHost && session.session === null) hotseat.resetModeLock()
+    // 还没开局就退出：把初设模式锁也解开，别让任何一方卡在不可改的 PVP 外壳里。
+    if (beforeGame) hotseat.resetModeLock()
   }
 
   /*
-   * 联机初设的视角：房主独自布两方，跟 `setupSideCursor` 走；开局后锁回本人阵营。
-   * 客人不参与初设，lobby 阶段不碰他的本机视角。
+   * 初设交棒：当前方确认后游标会立刻交给对方，给刚才那一方留一次补写权，
+   * 让“本方已完成”的最后一份状态能写进房间；成功后由 `publishNow` 清空。
+   * 远程应用时（`applyingRemote`）不设标记，避免把对方的交棒当成自己的。
    */
   watch(
     () => setup.setupSideCursor,
-    (cursor) => {
-      if (cursor === null || !active.value || !host.value) return
-      if (stage.value !== 'lobby' || setup.finished) return
-      hotseat.setViewerSide(cursor)
-    },
-    { flush: 'sync' },
-  )
-  watch(
-    () => [stage.value, setup.finished, session.session !== null] as const,
-    () => {
+    (cursor, previous) => {
       const side = mySide.value
-      if (!active.value || side === null) return
-      if (stage.value === 'game' || (host.value && setup.finished)) hotseat.lockViewer(side)
+      if (!active.value || applyingRemote.value || side === null) return
+      if (stage.value !== 'setup' || setup.finished) return
+      if (previous !== side || cursor === side) return
+      if (setup.setupSideConfirmed[side] !== true) return
+      pendingSetupWriteSide.value = side
+      schedulePublish(120)
     },
     { flush: 'sync' },
   )

@@ -98,12 +98,14 @@ onMounted(() => {
       </p>
       <p class="online__status" role="status">{{ online.statusLabel }}</p>
       <p v-if="waitingForHost" class="online__hint">
-        房主还在选剧本/完成初设；开局后会自动进入棋桌，不需要重新加入。
+        房主还在选剧本/进入初设；初设开始后会自动进入棋桌布设本方，不需要重新加入。
       </p>
-      <p v-else class="online__hint">对局已开始，视角固定为你执的一方。</p>
+      <p v-else class="online__hint">
+        已进入{{ online.stage === 'setup' ? '初设' : '对局' }}，视角固定为你执的一方。
+      </p>
       <div class="online__actions">
         <BaseButton v-if="!waitingForHost" variant="primary" size="sm" @click="emit('joined')">
-          进入棋桌
+          进入{{ online.stage === 'setup' ? '初设' : '棋桌' }}
         </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="online.leaveRoom()">离开</BaseButton>
       </div>
@@ -123,11 +125,18 @@ onMounted(() => {
       <p class="online__status" role="status">{{ online.statusLabel }}</p>
       <p v-if="waitingForHost && online.host" class="online__hint">
         <template v-if="online.lobbyScenarioId">
-          剧本已选定，正在完成初设；对方会自动进入棋桌。
+          剧本已选定，进入初设后双方各自布设本方；对方会自动进入棋桌。
         </template>
-        <template v-else> 房间已建立。请选择剧本；初设由你完成后，对方会自动进入棋桌。 </template>
+        <template v-else>
+          房间已建立。请选择剧本；进入初设后双方各自布设本方，不需要你替对方落子。
+        </template>
       </p>
-      <p v-else-if="waitingForHost" class="online__hint">等待房主选择剧本并完成初设。</p>
+      <p v-else-if="waitingForHost" class="online__hint">
+        等待房主选择剧本并进入初设；开始时你会自动进入棋桌布设本方。
+      </p>
+      <p v-else-if="online.stage === 'setup'" class="online__hint">
+        双方各自布设本方，按先后手自动交棒；只有当前布设方能操作。两方确认后由房主完成初设并开局。
+      </p>
       <p v-else class="online__hint">
         视角已锁定为你执的一方；切换视角入口已收起。对方先提交时，本地未提交的步骤会提示重做。
       </p>
@@ -153,7 +162,7 @@ onMounted(() => {
     <!-- 开始台：先建房，再去选剧本 -->
     <template v-else-if="props.variant === 'create'">
       <p class="online__hint">
-        先建房间，再选剧本。房间固定 PVP；初设由房主完成，对方可先加入等待。
+        先建房间，再选剧本。房间固定 PVP；进入初设后双方各自布设本方，对方可先加入等待。
       </p>
       <label class="online__label">你执哪一方</label>
       <div class="online__segmented">
@@ -176,7 +185,7 @@ onMounted(() => {
     <!-- 开始台：加入 -->
     <template v-else-if="props.variant === 'home'">
       <p class="online__hint">
-        粘贴房主发来的邀请链接；也可以分别填房间码与房钥。房间还没开局时会先占座等待。
+        粘贴房主发来的邀请链接；也可以分别填房间码与房钥。房间还没进入初设时会先占座等待。
       </p>
       <label class="online__label" for="online-code">房间码</label>
       <input

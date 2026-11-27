@@ -56,7 +56,7 @@ describe('online store local transport', () => {
     })
   })
 
-  it('opens a room before scenario selection and only replaces the guest when the host starts', async () => {
+  it('hands setup to each side in cursor order, then lets the host start the game', async () => {
     const host = freshStores()
     expect(await host.online.createRoom('axis')).toBe(true)
     expect(host.online.active).toBe(true)
@@ -64,32 +64,68 @@ describe('online store local transport', () => {
     expect(host.online.mySide).toBe('axis')
     expect(host.online.room?.scenarioId).toBeNull()
     expect(host.online.canWrite).toBe(true)
-    // 开始台建房本身不碰盘面；lobby 初设由房主独自布两方，先不锁视角。
+    // 联机外壳从建房起就锁本人阵营：初设也不能切到对方视角替其落子。
     host.online.reassertShell()
     expect(host.hotseat.viewerSide).toBe('axis')
-    expect(host.hotseat.viewerLockedTo).toBeNull()
-    // 初设游标换到苏联，房主视角跟着走，否则执轴心时会被“等苏联布设”卡死。
-    host.setup.$patch({ setupSideCursor: 'soviet' })
-    expect(host.hotseat.viewerSide).toBe('soviet')
+    expect(host.hotseat.viewerLockedTo).toBe('axis')
+
+    // 房主进入初设：先布设方是苏联（客人），房主此刻只读等待。
+    host.session.$patch({ scenarioId: '1' })
+    host.setup.$patch({
+      applied: true,
+      setupSideCursor: 'soviet',
+      setupSideConfirmed: {},
+      finished: false,
+    })
+    await host.online.publishNow()
+    expect(host.online.stage).toBe('setup')
+    expect(host.online.canWrite).toBe(false)
+    const setupState = host.online.room?.state
+    if (setupState?.stage !== 'setup') throw new Error('expected setup state')
+
     const code = host.online.roomCode
     const token = host.online.roomToken
     expect(code).not.toBeNull()
     expect(token).not.toBeNull()
 
+    // 客人加入就能拿到完整初设现场，并可直接操作本方苏联。
     const guest = freshStores()
     expect(await guest.online.joinRoom(code!, token!)).toBe(true)
     expect(guest.online.active).toBe(true)
-    expect(guest.online.stage).toBe('lobby')
+    expect(guest.online.stage).toBe('setup')
     expect(guest.online.mySide).toBe('soviet')
-    expect(guest.online.canWrite).toBe(false)
-    // lobby 阶段只占座等待，不替换客人本机盘面。
+    expect(guest.online.canWrite).toBe(true)
     expect(guest.session.session).toBeNull()
-    expect(guest.hotseat.viewerLockedTo).toBeNull()
+    expect(guest.setup.applied).toBe(true)
+    expect(guest.setup.setupSideCursor).toBe('soviet')
+    expect(guest.hotseat.viewerSide).toBe('soviet')
+    expect(guest.hotseat.viewerLockedTo).toBe('soviet')
+    expect(guest.hotseat.setViewerSide('axis')).toBe(false)
 
-    // 房主选完剧本、完成初设并开局后，同一房间转为完整 PVP 状态。
+    // 客人确认苏联布设 → 交棒给轴心房主；最后一包“苏联已完成”必须写进房间。
+    guest.setup.$patch({
+      setupSideConfirmed: { soviet: true },
+      setupSideCursor: 'axis',
+    })
+    await guest.online.publishNow()
+    await host.online.refreshNow()
+    expect(host.setup.setupSideCursor).toBe('axis')
+    expect(host.setup.setupSideConfirmed['soviet']).toBe(true)
+    expect(host.online.canWrite).toBe(true)
+
+    // 房主确认轴心 → 两方归位；房主收束初设并开局。
+    host.setup.$patch({
+      setupSideConfirmed: { soviet: true, axis: true },
+      setupSideCursor: null,
+    })
+    await host.online.publishNow()
+    await guest.online.refreshNow()
+    expect(guest.setup.setupSideCursor).toBeNull()
+    expect(guest.setup.setupSideConfirmed['axis']).toBe(true)
+    expect(guest.online.canWrite).toBe(false)
+
     expect(host.session.startGame(host.workbench.seed)).toBe(true)
     host.setup.$patch({ finished: true })
-    host.workbench.activeSide = 'axis'
     await host.online.publishNow()
     expect(host.online.stage).toBe('game')
     expect(host.hotseat.viewerLockedTo).toBe('axis')

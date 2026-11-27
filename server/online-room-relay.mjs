@@ -113,7 +113,7 @@ function validState(state) {
   if (state.stage === 'lobby') {
     return state.scenarioId === null || typeof state.scenarioId === 'string'
   }
-  if (state.stage !== 'game') return false
+  if (state.stage !== 'setup' && state.stage !== 'game') return false
   return (
     typeof state.scenarioId === 'string' &&
     typeof state.session === 'object' &&
@@ -226,8 +226,17 @@ const server = http.createServer(async (request, response) => {
         fail(response, 400, 'invalidRoomInput')
         return
       }
-      // 房间一旦有完整对局，不允许退回 lobby，也不允许换剧本；
-      // lobby 阶段则允许房主从“未选剧本”切到已选剧本，随后转 game。
+      // 进入初设后剧本固定、阶段只许前进：lobby → setup → game，不允许 game/setup 回退。
+      // lobby 阶段允许房主改选剧本；一旦带完整初设状态，换剧本会让对方的布设落在错误盘面上。
+      if (room.state?.stage === 'setup') {
+        if (
+          (body.state.stage !== 'setup' && body.state.stage !== 'game') ||
+          body.state.scenarioId !== room.scenarioId
+        ) {
+          fail(response, 400, 'scenarioMismatch')
+          return
+        }
+      }
       if (room.state?.stage === 'game') {
         if (body.state.stage !== 'game' || body.state.scenarioId !== room.scenarioId) {
           fail(response, 400, 'scenarioMismatch')

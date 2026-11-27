@@ -6,6 +6,7 @@ import { clampDockOffset } from '@/components/map/dock-position'
 import { isAndroidPlatform } from '@/shared/platform'
 import {
   useHotseatStore,
+  useOnlineStore,
   useSetupStore,
   useTutorialStore,
   useWorkbenchStore,
@@ -33,6 +34,7 @@ import {
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
+const online = useOnlineStore()
 const workbench = useWorkbenchStore()
 /**
  * 教学模式（用户 2026-11-23）：苏方初设由脚本自动落完，轴心的飞机要玩家自己入盒 ⇒
@@ -277,7 +279,22 @@ const allPlaced = computed(() => setup.initialPlacementsComplete)
  * 不再单独给抽取按钮。剩下两枚（开始游戏 / 完成初设）本就互斥，
  * 这里按同一组既有投影压成一枚，模板只留一个 `BaseButton` —— 不新造判定。
  */
+/**
+ * 联机初设的收束只由房主执行
+ *
+ * 双方各自确认本方后，房主一人点「完成初设」建立 session；客人若先开局，本机有会话但
+ * 房间仍停在 setup，且客人没有写 game 的权限，会把自己的界面推进到一半却无法通知房主。
+ */
+const canFinishOnlineSetup = computed<boolean>(
+  () => !online.active || online.stage !== 'setup' || online.host,
+)
+/** 客人完成本方、双方游标归位后，只等房主收束；不要留一个没有按钮的空面板。 */
+const waitingOnlineHost = computed<boolean>(
+  () => online.active && online.stage === 'setup' && !online.host && cursorSide.value === null,
+)
+
 const setupPrimary = computed<{ label: string; run: () => void } | null>(() => {
+  if (!canFinishOnlineSetup.value) return null
   if (setup.setupStartEntryVisible) {
     return { label: '开始游戏', run: () => setup.startGameNow() }
   }
@@ -439,6 +456,9 @@ function onPointerUp(): void {
     <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
       {{ waitingSideName }}正在初设，等当前方完成后自动轮到你。
     </p>
+    <p v-else-if="waitingOnlineHost" class="queue__wait" role="status">
+      双方初设已确认，等待房主完成初设并开局。
+    </p>
     <template v-else>
       <!-- 动作行：主入口（开始游戏 / 完成初设）· 分方确认 · 自动放置 -->
       <div class="queue__actions">
@@ -583,7 +603,7 @@ function onPointerUp(): void {
       </details>
 
       <details
-        v-if="cursorSide === null && setup.omittablePlacements.length > 0"
+        v-if="canFinishOnlineSetup && cursorSide === null && setup.omittablePlacements.length > 0"
         class="queue__group"
       >
         <summary class="queue__group-title">

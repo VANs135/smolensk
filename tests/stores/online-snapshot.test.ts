@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { hashOnlineState } from '@/net/hash'
+import { ONLINE_PROTOCOL_VERSION } from '@/net/online-types'
 import { useGameSessionStore, useHotseatStore, useSetupStore, useWorkbenchStore } from '@/stores'
 import { applyOnlineState, captureOnlineState } from '@/stores/online-snapshot'
 
@@ -20,8 +21,35 @@ describe('online state replication', () => {
     const stores = hostStores()
     const state = captureOnlineState(stores)
     expect(state.stage).toBe('lobby')
-    expect(state.protocol).toBe(2)
+    expect(state.protocol).toBe(ONLINE_PROTOCOL_VERSION)
     expect(state.scenarioId).toBeNull()
+  })
+
+  it('captures a pre-session setup state and lets the guest apply it', () => {
+    const host = hostStores()
+    host.session.$patch({ scenarioId: '1' })
+    host.setup.$patch({
+      applied: true,
+      setupSideCursor: 'soviet',
+      setupSideConfirmed: {},
+      finished: false,
+    })
+    const state = captureOnlineState(host)
+    if (state.stage !== 'setup') throw new Error('expected a setup state')
+    expect(state.protocol).toBe(ONLINE_PROTOCOL_VERSION)
+    expect(state.scenarioId).toBe('1')
+    expect(state.session['session']).toBeNull()
+    expect(state.setup['setupSideCursor']).toBe('soviet')
+    expect(state.workbench['units']).toBeDefined()
+
+    const guest = hostStores()
+    applyOnlineState(guest, state, 'soviet')
+    expect(guest.session.session).toBeNull()
+    expect(guest.setup.applied).toBe(true)
+    expect(guest.setup.setupSideCursor).toBe('soviet')
+    expect(guest.hotseat.mode).toBe('pvp')
+    expect(guest.hotseat.viewerSide).toBe('soviet')
+    expect(guest.hotseat.viewerLockedTo).toBe('soviet')
   })
 
   it('captures a complete state and applies it to a second store set', () => {
@@ -32,7 +60,7 @@ describe('online state replication', () => {
 
     const state = captureOnlineState(host)
     if (state.stage !== 'game') throw new Error('expected a game state')
-    expect(state.protocol).toBe(2)
+    expect(state.protocol).toBe(ONLINE_PROTOCOL_VERSION)
     expect(state.hotseat.mode).toBe('pvp')
     expect(state.hotseat.aiSide).toBeNull()
     expect(state.scenarioId).toBe(host.session.scenarioId)
