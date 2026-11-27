@@ -726,7 +726,10 @@ export function snapshotOf(
    */
   const reachableHexes = moveActive
     ? (w.groupReachable.hexes as { hex: AiHex; mpSpent: number; path?: AiHex[] }[])
-        .filter((node) => !visitedHexKeys.has(hexKeyOf(node.hex)) && !currentHexKeys.has(hexKeyOf(node.hex)))
+        .filter(
+          (node) =>
+            !visitedHexKeys.has(hexKeyOf(node.hex)) && !currentHexKeys.has(hexKeyOf(node.hex)),
+        )
         // 带上累计 MP：客户端在绿格上标数字（Web 版「圈内数字＝累计 MP」同口径）
         // 带上引擎自己算的推荐路径：客户端悬停画路线（Web 版 dragPath 同口径），**不在地图端重算路径**
         .map((node) => ({
@@ -1230,6 +1233,25 @@ export function snapshotOf(
             )
           : [],
       triedDefenderHexes: memory.combatHexes,
+      /*
+       * 9.6：行动值**候选单位**（web 面板的那两份清单，直接取 store 投影）
+       *
+       * `combatAttackerArOptions` 给攻方全体参战；`combatDefenderArChoices` 已按专规 2.3b
+       * （NKVD 在场时必须由它担任）收窄过 ⇒ 客户端不必自己筛。
+       * `selected*` 是引擎当前预选（默认"AR 最高"），客户端只显示谁被选中。
+       */
+      arOptions: {
+        attacker: w.combatAttackerArOptions.map((option) => ({
+          unitId: option.id,
+          label: option.label,
+          selected: w.combatInputs.attackerArUnitId === option.id,
+        })),
+        defender: w.combatDefenderArChoices.map((option) => ({
+          unitId: option.id,
+          label: option.label,
+          selected: w.combatInputs.defenderArUnitId === option.id,
+        })),
+      },
     },
     supply: {
       planLoaded: plan !== null && plan !== undefined,
@@ -1807,6 +1829,18 @@ function execute(
     }
     case 'combatDeclareAr':
       return w.declareCombatArStep(action.side)
+    /*
+     * 9.6 选择（不是宣布）：照 web 面板的同一条写法，只写 `combatInputs` 的预选。
+     * 合法性由随后的 `declareCombatArStep` 判（含专规 2.3b 的 NKVD 收窄）——这里不另立门槛。
+     */
+    case 'combatArUnit': {
+      if (action.side === 'attacker') {
+        w.combatInputs.attackerArUnitId = action.unitId
+      } else {
+        w.combatInputs.defenderArUnitId = action.unitId
+      }
+      return true
+    }
     case 'combatAutoResolve':
       return w.autoResolveCombatToOutcome()
     case 'combatLosses':

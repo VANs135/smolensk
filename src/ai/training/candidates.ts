@@ -15,7 +15,13 @@
  * - 战斗补给按快照首个补给站组合，不枚举所有「站点 × 储备」组合；
  * - 炮击/战斗的入口合法性仍交给引擎。
  */
-import { hexKeyOf, type AiAction, type AiCombatSnapshot, type AiHex, type AiSnapshot } from '../policy'
+import {
+  hexKeyOf,
+  type AiAction,
+  type AiCombatSnapshot,
+  type AiHex,
+  type AiSnapshot,
+} from '../policy'
 import { canonicalActionKeyOf } from './action-key'
 import type { TrainingIdentity } from './identity'
 
@@ -70,6 +76,31 @@ export function combatSupplyCandidates(combat: AiCombatSnapshot): AiAction[] {
     )
   }
   out.push({ kind: 'combatSkip' })
+  return out
+}
+
+/**
+ * 9.6「宣布行动值」这一步的候选：**先给换人**，再给宣布
+ *
+ * 为什么要换人这一步：web 面板是先点一枚单位（写 `combatInputs` 的预选）再按宣布；
+ * 桥接端若只给"宣布"，就只能吃引擎默认值（可选前提下 AR 最高），玩家/AI 换不了。
+ *
+ * 口径：候选池取 store 的两份清单（守方那份已按专规 2.3b 收窄）；已选中的那枚不再列
+ * （点了也不会变，属空转）。宣布只能做一侧：守方必须等攻方落定（9.6）。
+ */
+export function combatDeclareArCandidates(combat: AiCombatSnapshot): AiAction[] {
+  const state = combat.state
+  if (state === null || state.finished || state.step !== 'declareAr') return []
+  const side: 'attacker' | 'defender' =
+    state.declaredAttackerArUnitId === undefined ? 'attacker' : 'defender'
+  const options =
+    (side === 'attacker' ? combat.arOptions?.attacker : combat.arOptions?.defender) ?? []
+  const out: AiAction[] = []
+  for (const option of options) {
+    if (option.selected) continue
+    out.push({ kind: 'combatArUnit', side, unitId: option.unitId })
+  }
+  out.push({ kind: 'combatDeclareAr', side })
   return out
 }
 
@@ -282,15 +313,7 @@ export function candidateActionsOf(
         for (const action of combatSupplyCandidates(snapshot.combat)) add(action)
         break
       case 'declareAr':
-        /*
-         * 9.6：守方后宣布 ⇒ 攻方还没落定前只列攻方这一条，否则会出「重复宣布攻方」的空转
-         * （`declareCombatArStep('attacker')` 再点一次仍返回 true，但 state 不前进）。
-         */
-        if (combatState.declaredAttackerArUnitId === undefined) {
-          add({ kind: 'combatDeclareAr', side: 'attacker' })
-        } else {
-          add({ kind: 'combatDeclareAr', side: 'defender' })
-        }
+        for (const action of combatDeclareArCandidates(snapshot.combat)) add(action)
         break
       case 'declareTerrain':
       case 'surprise':

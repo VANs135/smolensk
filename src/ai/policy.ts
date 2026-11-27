@@ -144,6 +144,16 @@ export interface AiCombatSnapshot {
     }[]
   }[]
   triedDefenderHexes: readonly string[]
+  /**
+   * 9.6：行动值**候选单位**（store 两份清单的原样投影：攻方全体参战 / 守方已按专规 2.3b 收窄）
+   *
+   * 客户端用它画"点哪一枚担任行动值"，`selected` 是引擎当前预选（默认 AR 最高者）。
+   * 可选：老夹具不传也不报错。
+   */
+  arOptions?: {
+    attacker: readonly { unitId: string; label: string; selected: boolean }[]
+    defender: readonly { unitId: string; label: string; selected: boolean }[]
+  }
 }
 
 export interface AiSupplySnapshot {
@@ -486,6 +496,13 @@ export type AiAction =
       defenderUsesInternalStocks?: boolean
     }
   | { kind: 'combatDeclareAr'; side: 'attacker' | 'defender' }
+  /**
+   * 9.6：**先选行动值单位**（web 面板里点一枚即写 `combatInputs.attacker/defenderArUnitId`）
+   *
+   * 桥接端原先缺这一步 ⇒ 只能吃引擎默认值（"可选前提下 AR 最高"），玩家/AI 换不了。
+   * 这里只是"选择"，不宣布；宣布仍是紧随其后的 `combatDeclareAr`。
+   */
+  | { kind: 'combatArUnit'; side: 'attacker' | 'defender'; unitId: string }
   | { kind: 'combatAutoResolve' }
   | { kind: 'combatLosses' }
   | { kind: 'combatOptions'; retreatHexes: number; lossPoints: number; ignoreOptions: boolean }
@@ -638,6 +655,7 @@ export const AI_ACTION_KINDS = [
   'combatBegin',
   'combatSupply',
   'combatDeclareAr',
+  'combatArUnit',
   'combatAutoResolve',
   'combatLosses',
   'combatOptions',
@@ -1202,6 +1220,7 @@ const AI_BASELINE_KINDS: ReadonlySet<string> = new Set([
   'supplyTrainPlace',
   'combatSupply',
   'combatDeclareAr',
+  'combatArUnit',
   'combatAutoResolve',
   'combatLosses',
   'combatOptions',
