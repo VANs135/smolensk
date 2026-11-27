@@ -1047,10 +1047,10 @@ export function snapshotOf(
     },
 
     /*
-     * 会话框「这一步要办什么」：文字与顺序**直接复用 web 版** `planSessionSteps`（`panel-steps.ts`），
-     * 客户端只渲染、不造句。改 web 文案即等于改客户端文案，避免两份真相漂移。
+     * 会话框：标题 / 规则角标 / 关闭语义 / 待决清单**整段读 web 的 mapView store**（`panel-steps.ts`），
+     * 客户端只渲染、不造句、也不判"该不该关"。改 web 面板即等于改客户端。
      */
-    panel: projectPanel(w),
+    panel: projectPanel(),
 
     control: {
       // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值

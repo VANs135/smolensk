@@ -1,142 +1,69 @@
 /**
- * 会话框「这一步要办什么」的投影（**文字与顺序复用 web 版**）
+ * 会话框投影：**直接读 web 的 `mapView` store**（标题 / 规则角标 / 关闭语义 / 待决清单全复用）
  *
- * 为什么要有它：Godot 客户端原先自己抄了一份中文文案（战斗/炮击每一步叫什么、为什么出现），
- * 那是第二份真相——web 改了文案，Godot 不会跟着变。这里改成把 web 版
- * `@/stores/session-steps` 的 `planSessionSteps` 直接拿来算，再把结果投影进观察，
- * 客户端只渲染，不造句。
+ * 为什么这么做：Godot 客户端原先自己抄了一份"这一步要办什么"的中文文案，那是第二份真相。
+ * 上一版尝试是在训练侧重建 facts 再调 `planSessionSteps`——文字确实同源了，
+ * 但"哪一类会话该开""能不能关"仍在训练侧另写了一遍（`panelKindOf` / `closeOf`）。
+ * 现在改为直接问 `map-view` store：它本来就负责"会话开不开、标题叫什么、关不关得掉"，
+ * 训练环境（无头 pinia）里可以正常实例化（已实测）。
  *
- * 判据一律照 `map-view.ts` 的同一口径读 store（会话种类＝当前活着的那个交互）；
- * 本模块不新增任何规则，只做「读事实 → 交给 planSessionSteps」。
+ * 纪律：本模块只读 store，不新增任何规则判定，也不往 store 写任何东西。
  */
 
-import type { SessionStepFacts, SessionStepItem } from '@/stores/session-steps'
-import { exposedSessionStep, planSessionSteps } from '@/stores/session-steps'
-import type { useWorkbenchStore } from '@/stores/workbench'
+import { useMapViewStore } from '@/stores/map-view'
 
-type Workbench = ReturnType<typeof useWorkbenchStore>
+/** 会话种类（与 web `MapSessionKind` 同集合；`null`＝本刻没有会话） */
+export type PanelKind = string | null
 
-/** 会话种类（训练/桥接端只认这几类；web 的 fuel/air/ops/reinforce 等仍由 web 自己开） */
-export type PanelKind = 'combat' | 'barrage' | 'supply' | 'move' | null
-
-/**
- * 当前活着的会话种类
- *
- * 顺序照 `map-view.ts::sessionBase`：战斗 → 轰炸（含"已选参炸单位、尚未宣布"）→ 补给 → 移动。
- * 只比 web 少「fuel/ops/air/reinforce/exclusive/breakout/containers/unit」这些 web 独立开的窗，
- * 桥接端暂不投影，返回 null 时客户端退回到"按 segment 显示"的老路。
- */
-export function panelKindOf(wb: Workbench): PanelKind {
-  const combat = wb.combatState
-  if (combat !== null && !combat.finished) return 'combat'
-  const barrage = wb.barrageState
-  if (barrage !== null && !barrage.finished) return 'barrage'
-  if (barrage === null && wb.barrageActive && wb.barrageSelectionAllowedNow) return 'barrage'
-  if (wb.supplyState !== null) return 'supply'
-  const moving = wb.moveInteraction
-  if (moving !== null || wb.movePick !== null) return 'move'
-  return null
-}
-
-/** 空事实表（`planSessionSteps` 只在 kind 命中的那一支读字段，其余给安全默认） */
-function emptyFacts(kind: PanelKind): SessionStepFacts {
-  return {
-    kind,
-    combat: null,
-    barrage: null,
-    air: null,
-    ops: null,
-    supply: null,
-    move: { fuelPending: false, pickPending: false, moving: false, overrunZocHeld: false },
-    reinforce: null,
-    breakout: false,
-    breakoutReturnPending: false,
-    containers: false,
-    exclusive: false,
-    exclusiveSections: [],
-    unit: false,
-  }
-}
-
-/** 按 web 同一口径读出事实（只填本次 kind 用到的那几项） */
-export function panelFactsOf(wb: Workbench, kind: PanelKind): SessionStepFacts {
-  const facts = emptyFacts(kind)
-  if (kind === 'combat') {
-    const combat = wb.combatState
-    facts.combat =
-      combat === null || combat.finished
-        ? { started: false, step: 'composition', attackerArDeclared: false }
-        : {
-            started: true,
-            step: combat.step,
-            attackerArDeclared: combat.declaredAttackerArUnitId !== undefined,
-          }
-  }
-  if (kind === 'barrage') {
-    const barrage = wb.barrageState
-    facts.barrage =
-      barrage === null || barrage.finished ? { step: 'declare' } : { step: barrage.step }
-  }
-  if (kind === 'supply') {
-    const supply = wb.supplyState
-    facts.supply = supply === null ? null : { step: supply.step }
-  }
-  if (kind === 'move') {
-    const moving = wb.moveInteraction
-    facts.move = {
-      fuelPending:
-        wb.actionAllowedNow('move.order') &&
-        wb.fuelPaymentDue &&
-        wb.actionAllowedNow('supply.fuel'),
-      pickPending:
-        wb.actionAllowedNow('move.order') &&
-        wb.movePick !== null &&
-        (moving === null || moving.finished),
-      moving: moving !== null && !moving.finished,
-      overrunZocHeld: wb.overrunZocHeld !== null,
-    }
-  }
-  return facts
-}
-
-/** 会话框投影：当前窗的一句话 + 整张待决清单（顺序由 `planSessionSteps` 决定） */
+/** 会话框投影（形状照 Godot 客户端要渲染的几处） */
 export interface PanelProjection {
   kind: PanelKind
+  /** 标题（如「战斗结算（9.2） · 格 12.31」），原样来自 `mapView.session.title` */
+  title: string
+  /** 规则角标（如 `9.2`），原样来自 `mapView.session.rule` */
+  rule: string
   /**
-   * 关闭语义（照 web `map-view.ts::closePolicyOf` 的同一口径，判据取 workbench 的同源查询）
+   * 关闭语义（原样来自 `mapView.session.closePolicy`，判据在 web `closePolicyOf`）
    *
    * - `cancel`：✕ / Esc 真的收起这次会话；
    * - `collapse`：只折叠、不中止（增援/突围/专规这类事务窗）；
    * - `refused`：域已提交/待结算 ⇒ **不给关闭路径**（连 Esc 也吞），只显示原因。
-   *   注意 web 的约定：`refused` 不许用按钮 disabled 装样子。
    */
-  close: { policy: 'cancel' | 'collapse' | 'refused'; reason?: string }
-  /** 当前暴露的那一件（web 一次只暴露一件；null＝本环节没有待决事项） */
-  step: SessionStepItem | null
-  /** 整张清单（客户端可用它显示「2/6」这类位置） */
-  steps: readonly SessionStepItem[]
+  close: { policy: string; reason: string }
+  /** 当前暴露的那一件（web 一次只暴露一件；null＝没有待决事项） */
+  step: { id: string; title: string; why: string; decision: string; optional: boolean } | null
+  /** 整张待决清单（客户端可显示「2/6」——`sessionSteps` 里当前那件的位置） */
+  steps: readonly { id: string; title: string; why: string; decision: string; optional: boolean }[]
+  /** 当前那件在清单里的位置（0 基；-1＝不在清单里） */
+  stepIndex: number
 }
 
-/** 关闭语义（与 `map-view.ts::closePolicyOf` 同口径；不重算"是否已提交"，只问 workbench） */
-function closeOf(
-  wb: Workbench,
-  kind: PanelKind,
-): { policy: 'cancel' | 'collapse' | 'refused'; reason?: string } {
-  if (kind === 'combat') {
-    const reason = wb.combatCancelBlocker()
-    return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
-  }
-  if (kind === 'barrage') {
-    const reason = wb.barrageCancelBlocker()
-    return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
-  }
-  // 补给 / 移动是"操作链"，随时可收（web 这两类也是 cancel）
-  return { policy: 'cancel' }
+const EMPTY: PanelProjection = {
+  kind: null,
+  title: '',
+  rule: '',
+  close: { policy: 'cancel', reason: '' },
+  step: null,
+  steps: [],
+  stepIndex: -1,
 }
 
-export function projectPanel(wb: Workbench): PanelProjection {
-  const kind = panelKindOf(wb)
-  if (kind === null) return { kind: null, close: { policy: 'cancel' }, step: null, steps: [] }
-  const steps = planSessionSteps(panelFactsOf(wb, kind))
-  return { kind, close: closeOf(wb, kind), steps, step: exposedSessionStep(steps) }
+export function projectPanel(): PanelProjection {
+  const mapView = useMapViewStore()
+  const session = mapView.session
+  if (session === null) return EMPTY
+  const steps = mapView.sessionSteps
+  const step = mapView.sessionStep
+  return {
+    kind: session.kind,
+    title: session.title,
+    rule: session.rule ?? '',
+    close: {
+      policy: session.closePolicy,
+      reason: session.closeBlockedReason ?? '',
+    },
+    step: step === null ? null : { ...step },
+    steps,
+    stepIndex: step === null ? -1 : steps.findIndex((entry) => entry.id === step.id),
+  }
 }

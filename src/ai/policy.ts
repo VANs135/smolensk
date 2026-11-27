@@ -347,17 +347,23 @@ export interface AiSnapshot {
    * 可选：老夹具 / 非桥接调用方不传也不报错。
    */
   panel?: {
-    kind: 'combat' | 'barrage' | 'supply' | 'move' | null
+    kind: string | null
+    /** 标题（web `mapView.session.title` 原样） */
+    title?: string
+    /** 规则角标（web `mapView.session.rule` 原样） */
+    rule?: string
     /** 关闭语义（见 `panel-steps.ts`：refused 表示不给关闭路径） */
-    close?: { policy: 'cancel' | 'collapse' | 'refused'; reason?: string }
+    close?: { policy: string; reason?: string }
     step: { id: string; title: string; why: string; decision: string; optional: boolean } | null
-    steps: readonly {
+    steps?: readonly {
       id: string
       title: string
       why: string
       decision: string
       optional: boolean
     }[]
+    /** 当前那件在 `steps` 里的位置（0 基；-1＝不在清单里） */
+    stepIndex?: number
   }
   setupInProgress: boolean
   /** 会话停在回合准备（天气 / 先手判定，2.2 / 2.3）——此时只能推进，不能按旧环节行动 */
