@@ -5,8 +5,10 @@
 远程热座 + 全量状态复制，外加一层**公开大厅 + 房间密码**：
 
 - 玩家在大厅先设置自己的显示 ID；房主再设置房间名、房间密码与阵营建房；
-- 大厅列表只公开房名、房主/客人 ID、人数、阶段与剧本，**不显示密码或写房令牌**；
+- 大厅列表只公开房名、房主/客人 ID、人数、阶段与剧本，**不显示密码、写房令牌或座位凭证**；
 - 加入者在大厅选房间、输入房主私下分享的密码，服务端校验后才下发写房令牌；
+- 建房响应只把 `hostSecret` 交给房主；客人首次加入时由服务端生成并只把 `guestSecret` 交给该客人。
+  公开的显示 ID **不是权限**：同一 ID 但没有对应凭证不能顶替房主或客人座位；
 - 每间房固定两人；房主离开会关闭房间，客人离开会释放座位；超过 TTL 未活动的房间自动清理；
 - 邀请链接只带房间号（`#online=CODE`），**不再带房钥**；打开链接后仍要输密码，避免链接绕过密码。
 
@@ -35,6 +37,7 @@
 
 未设置 `VITE_ONLINE_ROOM_URL` 时使用 `LocalRoomTransport`：房间行写进 `localStorage`，
 同一浏览器两个标签共享。大厅/密码流程同样可用，但密码只存在本机存储里，不是安全边界。
+房间行带 24h TTL：超过 24h 无活动会在列表读取时删除，不再永久占用房名。
 这**不是跨设备联机**；主页/棋桌会显示“本机双标签”。
 
 ### 2. HTTP 中继（跨设备）
@@ -62,17 +65,21 @@ TLS_CERT=/path/fullchain.pem TLS_KEY=/path/privkey.pem node server/online-room-r
 
 - `GET /rooms`：大厅列表；只返回公开摘要；
 - `POST /rooms`：创建房间，body 含 `name` / `password` / `hostId` / `hostSide` / `state` /
-  `stateHash`；服务端用 scrypt 存密码哈希，返回带令牌的完整房间行；
-- `POST /rooms/:code/join`：body 含 `password` / `playerId`；校验密码后下发令牌；
-- `GET /rooms/:code` + `x-room-token`：读取最新房间；
+  `stateHash`；服务端用 scrypt 存密码哈希，返回带 `hostSecret` 与令牌的完整房间行；
+- `POST /rooms/:code/join`：body 含 `password` / `playerId`，以及重连时的 `hostSecret` 或
+  `guestSecret`；校验密码与对应座位凭证后下发令牌；新客人首次加入时响应带 `guestSecret`；
+- `GET /rooms/:code` + `x-room-token`：读取最新房间（不含座位凭证）；
 - `PUT /rooms/:code` + `x-room-token` + `If-Match: <seq>`：CAS 写入；冲突返回
   `409 { latest }`；
-- `POST /rooms/:code/leave`：body 含 `password` / `playerId`；房主离开删房，客人离开释放座位；
+- `POST /rooms/:code/leave`：body 含 `password` / `playerId` / 对应座位凭证；房主离开删房，
+  客人离开释放座位；
 - `GET /health`：存活与房间数。
 
 `server/online-rooms.json` 是本地房间表，已加入 `.gitignore`；生产建议挂持久卷。
 密码不落明文；服务端只保存 `passwordSalt` / `passwordHash`，任何列表/读取接口都不返回它们。
+`hostSecret` / `guestSecret` 只在建房/首次加入/对应座位重连的响应里出现，不进入公开摘要。
 同一 IP 连续输错密码会触发短时 429；反向代理部署时按 `x-forwarded-for` 识别客户端。
+旧版 server 房间行没有 `hostSecret` / `guestSecret`，升级后不会被载入；需要让玩家重新建房。
 
 ## 使用流程
 
@@ -95,6 +102,8 @@ TLS_CERT=/path/fullchain.pem TLS_KEY=/path/privkey.pem node server/online-room-r
 - 双方必须使用**同一构建 / 同一 `DATA_VERSION`**；协议头不匹配会拒收。
 - 全量状态复制是可信对局方案，不是排位/防作弊方案；客户端能读到自己的完整状态（包含对方算子数据），
   战雾只是显示层。用户已接受该边界。
-- 房间不保存历史版本；最新状态在房间行里。刷新/断线后可用同一 ID + 密码重连，但当前页面还没有
-  “自动恢复上次房间”的会话持久化，刷新后需重新进入大厅加入。
-- 房主关闭浏览器而没有点「离开房间」时，房间会保留到 TTL（默认 24h）或房主下次用同一 ID + 密码重连后关闭。
+- 房间不保存历史版本；最新状态在房间行里。座位凭证保存在当前标签的 `sessionStorage`：
+  刷新/同标签断线后可用同一 ID + 密码 + 凭证重连；**新标签或换设备不会自动带回凭证**，
+  需要重新建房，或由房主在其它标签重新创建。当前页面还没有“自动恢复上次房间”的会话持久化。
+- 房主关闭浏览器而没有点「离开房间」时，房间会保留到 TTL（默认 24h）；本机房间同样按 24h
+  无活动清理，不再永久占用房名。房主用同一标签 + 凭证重连后仍可关闭房间。
