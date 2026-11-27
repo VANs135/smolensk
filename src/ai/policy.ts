@@ -348,6 +348,8 @@ export interface AiSnapshot {
    */
   panel?: {
     kind: 'combat' | 'barrage' | 'supply' | 'move' | null
+    /** 关闭语义（见 `panel-steps.ts`：refused 表示不给关闭路径） */
+    close?: { policy: 'cancel' | 'collapse' | 'refused'; reason?: string }
     step: { id: string; title: string; why: string; decision: string; optional: boolean } | null
     steps: readonly {
       id: string

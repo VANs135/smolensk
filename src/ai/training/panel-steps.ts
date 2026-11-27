@@ -12,7 +12,7 @@
 
 import type { SessionStepFacts, SessionStepItem } from '@/stores/session-steps'
 import { exposedSessionStep, planSessionSteps } from '@/stores/session-steps'
-import { useWorkbenchStore } from '@/stores/workbench'
+import type { useWorkbenchStore } from '@/stores/workbench'
 
 type Workbench = ReturnType<typeof useWorkbenchStore>
 
@@ -102,15 +102,41 @@ export function panelFactsOf(wb: Workbench, kind: PanelKind): SessionStepFacts {
 /** 会话框投影：当前窗的一句话 + 整张待决清单（顺序由 `planSessionSteps` 决定） */
 export interface PanelProjection {
   kind: PanelKind
+  /**
+   * 关闭语义（照 web `map-view.ts::closePolicyOf` 的同一口径，判据取 workbench 的同源查询）
+   *
+   * - `cancel`：✕ / Esc 真的收起这次会话；
+   * - `collapse`：只折叠、不中止（增援/突围/专规这类事务窗）；
+   * - `refused`：域已提交/待结算 ⇒ **不给关闭路径**（连 Esc 也吞），只显示原因。
+   *   注意 web 的约定：`refused` 不许用按钮 disabled 装样子。
+   */
+  close: { policy: 'cancel' | 'collapse' | 'refused'; reason?: string }
   /** 当前暴露的那一件（web 一次只暴露一件；null＝本环节没有待决事项） */
   step: SessionStepItem | null
   /** 整张清单（客户端可用它显示「2/6」这类位置） */
   steps: readonly SessionStepItem[]
 }
 
+/** 关闭语义（与 `map-view.ts::closePolicyOf` 同口径；不重算"是否已提交"，只问 workbench） */
+function closeOf(
+  wb: Workbench,
+  kind: PanelKind,
+): { policy: 'cancel' | 'collapse' | 'refused'; reason?: string } {
+  if (kind === 'combat') {
+    const reason = wb.combatCancelBlocker()
+    return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
+  }
+  if (kind === 'barrage') {
+    const reason = wb.barrageCancelBlocker()
+    return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
+  }
+  // 补给 / 移动是"操作链"，随时可收（web 这两类也是 cancel）
+  return { policy: 'cancel' }
+}
+
 export function projectPanel(wb: Workbench): PanelProjection {
   const kind = panelKindOf(wb)
-  if (kind === null) return { kind: null, step: null, steps: [] }
+  if (kind === null) return { kind: null, close: { policy: 'cancel' }, step: null, steps: [] }
   const steps = planSessionSteps(panelFactsOf(wb, kind))
-  return { kind, steps, step: exposedSessionStep(steps) }
+  return { kind, close: closeOf(wb, kind), steps, step: exposedSessionStep(steps) }
 }
