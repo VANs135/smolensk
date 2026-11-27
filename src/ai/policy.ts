@@ -154,6 +154,19 @@ export interface AiCombatSnapshot {
     attacker: readonly { unitId: string; label: string; selected: boolean }[]
     defender: readonly { unitId: string; label: string; selected: boolean }[]
   }
+  /**
+   * 9.11a/c：**军力损失的分担**（只在 `state.step === 'losses'` 时有值）
+   *
+   * `canonical` 是 store 的规范分配（`combatCanonicalLosses`：9.11c 两条约束下的均匀展开），
+   * `swapChoices` 是「多受的那一点可以改派给谁」（`combatLossSwapChoices`，已是 store 口径），
+   * `takerId` 是当前玩家意图（`combatInputs.lossTakerId`，`null`＝按规范分配）。
+   * 只有规范分配里出现「某单位受 2 点、另有单位只受 1 点」时 swapChoices 才非空 —— 那时改派才合规。
+   */
+  lossPlan?: {
+    canonical: readonly { unitId: string; steps: number }[]
+    swapChoices: readonly { unitId: string; label: string }[]
+    takerId: string | null
+  }
 }
 
 export interface AiSupplySnapshot {
@@ -513,6 +526,12 @@ export type AiAction =
   | { kind: 'combatArUnit'; side: 'attacker' | 'defender'; unitId: string }
   | { kind: 'combatAutoResolve' }
   | { kind: 'combatLosses' }
+  /**
+   * 9.11a/c：把「多受的那一点」改派给另一枚（`unitId: null` ＝回到规范分配）
+   *
+   * 只写 `combatInputs.lossTakerId`（web 面板就是直接写这个），随后 `combatLosses` 才把它交给引擎校验。
+   */
+  | { kind: 'combatLossTaker'; unitId: string | null }
   | { kind: 'combatOptions'; retreatHexes: number; lossPoints: number; ignoreOptions: boolean }
   | { kind: 'combatRetreatPaths'; paths: readonly { unitId: string; path: readonly AiHex[] }[] }
   | { kind: 'combatAdvance' }
@@ -668,6 +687,7 @@ export const AI_ACTION_KINDS = [
   'combatArUnit',
   'combatAutoResolve',
   'combatLosses',
+  'combatLossTaker',
   'combatOptions',
   'combatRetreatPaths',
   'combatAdvance',
@@ -1233,6 +1253,7 @@ const AI_BASELINE_KINDS: ReadonlySet<string> = new Set([
   'combatArUnit',
   'combatAutoResolve',
   'combatLosses',
+  'combatLossTaker',
   'combatOptions',
   'combatRetreatPaths',
   'combatAdvance',

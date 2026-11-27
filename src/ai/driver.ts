@@ -1252,6 +1252,24 @@ export function snapshotOf(
           selected: w.combatInputs.defenderArUnitId === option.id,
         })),
       },
+      /*
+       * 9.11a/c：损失分担。只在 `losses` 步给（别的步这两份计算值没有意义），
+       * `canonical / swapChoices` 都是 store 原样投影 —— 合规余地由 store 判，AI 不另立口径。
+       */
+      lossPlan:
+        w.combatState?.step === 'losses'
+          ? {
+              canonical: w.combatCanonicalLosses.map((item) => ({
+                unitId: item.unitId,
+                steps: item.steps,
+              })),
+              swapChoices: w.combatLossSwapChoices.map((choice) => ({
+                unitId: choice.unitId,
+                label: choice.label,
+              })),
+              takerId: w.combatInputs.lossTakerId,
+            }
+          : undefined,
     },
     supply: {
       planLoaded: plan !== null && plan !== undefined,
@@ -1861,6 +1879,19 @@ function execute(
       return w.autoResolveCombatToOutcome()
     case 'combatLosses':
       return w.confirmCombatLosses()
+    /*
+     * 9.11a/c：只写玩家意图（web 面板同一条路：直接赋 `combatInputs.lossTakerId`），
+     * 合法性由随后 `combatLosses` 交给引擎的 `validateBattleLossAllocation` 判 ⇒ 这里只挡"候选之外的单位"。
+     */
+    case 'combatLossTaker': {
+      if (
+        action.unitId !== null &&
+        !w.combatLossSwapChoices.some((c) => c.unitId === action.unitId)
+      )
+        return false
+      w.combatInputs = { ...w.combatInputs, lossTakerId: action.unitId }
+      return true
+    }
     case 'combatOptions': {
       const requirement = w.combatRequirement
       if (requirement === null) return false

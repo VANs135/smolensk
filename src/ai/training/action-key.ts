@@ -175,6 +175,8 @@ export function canonicalActionKeyOf(action: AiAction, ids: ActionIdResolver): s
     /* 9.6 选择步：key 里带稳定 id（`ids.unit` 会把运行时实例 id 换成 `u:side:library:n`） */
     case 'combatArUnit':
       return `combatArUnit:${action.side}:${ids.unit(action.unitId)}`
+    case 'combatLossTaker':
+      return `combatLossTaker:${action.unitId === null ? 'canonical' : ids.unit(action.unitId)}`
     case 'combatAutoResolve':
       return 'combatAutoResolve'
     case 'combatLosses':

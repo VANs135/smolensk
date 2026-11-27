@@ -104,6 +104,27 @@ export function combatDeclareArCandidates(combat: AiCombatSnapshot): AiAction[] 
   return out
 }
 
+/**
+ * 9.11a/c：损失步的候选 —— **先给"改派给谁"，再给确认**
+ *
+ * 口径照 web `CombatPanel`：点一枚单位＝把规范分配里"多受的那一点"换给谁（两枚互换点数，仍满足 9.11c
+ * 的均匀展开）；`unitId: null` ＝回到规范分配。候选池直接取 store 的 `combatLossSwapChoices`，
+ * 没这种余地（没人受 2 点）时只给确认 —— 不造"改了也没用"的条目。
+ */
+export function combatLossCandidates(combat: AiCombatSnapshot): AiAction[] {
+  const out: AiAction[] = []
+  const plan = combat.lossPlan
+  if (plan !== undefined) {
+    if (plan.takerId !== null) out.push({ kind: 'combatLossTaker', unitId: null })
+    for (const choice of plan.swapChoices) {
+      if (choice.unitId === plan.takerId) continue
+      out.push({ kind: 'combatLossTaker', unitId: choice.unitId })
+    }
+  }
+  out.push({ kind: 'combatLosses' })
+  return out
+}
+
 function pushUnique(
   out: TrainingCandidate[],
   seen: Set<string>,
@@ -329,7 +350,7 @@ export function candidateActionsOf(
         add({ kind: 'combatAutoResolve' })
         break
       case 'losses':
-        add({ kind: 'combatLosses' })
+        for (const action of combatLossCandidates(snapshot.combat)) add(action)
         break
       case 'options': {
         const requirement = snapshot.combat.requirement
